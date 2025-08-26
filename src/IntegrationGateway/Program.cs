@@ -70,55 +70,7 @@ if (jwtOptions != null && !string.IsNullOrEmpty(jwtOptions.SecretKey))
 
 // Add OpenAPI/Swagger
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(options =>
-{
-    options.SwaggerDoc("v1", new OpenApiInfo 
-    { 
-        Title = "Integration Gateway API", 
-        Version = "v1",
-        Description = "A robust Integration Gateway that orchestrates ERP and Warehouse services"
-    });
-    
-    options.SwaggerDoc("v2", new OpenApiInfo 
-    { 
-        Title = "Integration Gateway API", 
-        Version = "v2",
-        Description = "Enhanced version with additional fields and metadata"
-    });
-
-    // Add security definition
-    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
-    {
-        Description = "JWT Authorization header using the Bearer scheme",
-        Name = "Authorization",
-        In = ParameterLocation.Header,
-        Type = SecuritySchemeType.ApiKey,
-        Scheme = "Bearer"
-    });
-
-    options.AddSecurityRequirement(new OpenApiSecurityRequirement
-    {
-        {
-            new OpenApiSecurityScheme
-            {
-                Reference = new OpenApiReference
-                {
-                    Type = ReferenceType.SecurityScheme,
-                    Id = "Bearer"
-                }
-            },
-            Array.Empty<string>()
-        }
-    });
-
-    // Include XML comments if available
-    var xmlFile = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
-    var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
-    if (File.Exists(xmlPath))
-    {
-        options.IncludeXmlComments(xmlPath);
-    }
-});
+builder.Services.ConfigureSwagger();
 
 // Add health checks
 builder.Services.AddHealthChecks();
@@ -139,12 +91,29 @@ var app = builder.Build();
 // Configure the HTTP request pipeline
 if (app.Environment.IsDevelopment())
 {
-    app.UseSwagger();
+    app.UseSwagger(c =>
+    {
+        c.RouteTemplate = "swagger/{documentname}/swagger.json";
+    });
+    
     app.UseSwaggerUI(options =>
     {
         options.SwaggerEndpoint("/swagger/v1/swagger.json", "Integration Gateway API V1");
         options.SwaggerEndpoint("/swagger/v2/swagger.json", "Integration Gateway API V2");
-        options.RoutePrefix = string.Empty; // Serve Swagger UI at root
+        options.RoutePrefix = "swagger";
+        options.DocumentTitle = "Integration Gateway API Documentation";
+        options.DefaultModelsExpandDepth(-1); // Hide schemas section by default
+        options.DefaultModelExpandDepth(2);
+        options.DocExpansion(Swashbuckle.AspNetCore.SwaggerUI.DocExpansion.List);
+        options.EnableDeepLinking();
+        options.DisplayOperationId();
+        options.EnableValidator();
+        options.ShowExtensions();
+        options.EnableFilter();
+        options.MaxDisplayedTags(10);
+        
+        // Custom CSS for better appearance
+        options.InjectStylesheet("/swagger-ui/custom.css");
     });
 }
 
@@ -170,7 +139,15 @@ app.MapGet("/", () => new
     Version = "1.0.0",
     Status = "Running",
     Timestamp = DateTime.UtcNow,
-    ApiDocumentation = "/swagger"
+    ApiDocumentation = "/swagger",
+    Endpoints = new
+    {
+        Health = "/health",
+        V1_Products = "/api/v1/products",
+        V2_Products = "/api/v2/products",
+        OpenAPI_V1 = "/swagger/v1/swagger.json",
+        OpenAPI_V2 = "/swagger/v2/swagger.json"
+    }
 });
 
 app.Run();

@@ -1,0 +1,189 @@
+/* Custom Swagger UI Styles for Integration Gateway */
+
+/* Header customization */
+.swagger-ui .topbar {
+    background-color: #1b365d;
+    border-bottom: 3px solid #4a90a4;
+}
+
+.swagger-ui .topbar .download-url-wrapper {
+    display: none;
+}
+
+.swagger-ui .topbar .topbar-wrapper {
+    padding: 20px 0;
+}
+
+/* Custom colors */
+.swagger-ui .scheme-container {
+    background: #f7f7f7;
+    border: 1px solid #d6d6d6;
+    border-radius: 4px;
+    margin: 0 0 20px 0;
+    padding: 10px;
+}
+
+.swagger-ui .info .title {
+    color: #1b365d;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.swagger-ui .info .description {
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+/* Operation styling */
+.swagger-ui .opblock.opblock-get {
+    border-color: #4a90a4;
+    background: rgba(74, 144, 164, 0.1);
+}
+
+.swagger-ui .opblock.opblock-post {
+    border-color: #49cc90;
+    background: rgba(73, 204, 144, 0.1);
+}
+
+.swagger-ui .opblock.opblock-put {
+    border-color: #fca130;
+    background: rgba(252, 161, 48, 0.1);
+}
+
+.swagger-ui .opblock.opblock-delete {
+    border-color: #f93e3e;
+    background: rgba(249, 62, 62, 0.1);
+}
+
+/* Response styling */
+.swagger-ui .response-col_status {
+    font-weight: bold;
+}
+
+.swagger-ui .response-col_description {
+    font-style: italic;
+}
+
+/* Custom badge for idempotency */
+.swagger-ui .opblock .opblock-summary-description:after {
+    content: '';
+}
+
+.swagger-ui .opblock.opblock-post .opblock-summary-description:after,
+.swagger-ui .opblock.opblock-put .opblock-summary-description:after {
+    content: ' 🔒 Idempotent';
+    background: #1b365d;
+    color: white;
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 10px;
+    margin-left: 10px;
+    font-weight: normal;
+}
+
+/* JWT Auth styling */
+.swagger-ui .auth-wrapper {
+    padding: 20px;
+    background: #f0f8ff;
+    border-radius: 5px;
+    margin: 20px 0;
+}
+
+/* Parameter styling */
+.swagger-ui .parameter__name {
+    font-weight: bold;
+    color: #1b365d;
+}
+
+.swagger-ui .parameter__type {
+    color: #4a90a4;
+    font-style: italic;
+}
+
+/* Model styling */
+.swagger-ui .model-box {
+    background: #f9f9f9;
+}
+
+.swagger-ui .model .property {
+    border-left: 3px solid #4a90a4;
+    padding-left: 10px;
+    margin: 5px 0;
+}
+
+/* Version tabs styling */
+.swagger-ui .info .info-dropdown {
+    background: #1b365d;
+    color: white;
+    border-radius: 4px;
+    padding: 10px;
+    margin: 10px 0;
+}
+
+/* Custom styling for operation tags */
+.swagger-ui .opblock-tag {
+    background: linear-gradient(135deg, #1b365d 0%, #4a90a4 100%);
+    color: white;
+    border-radius: 4px;
+    margin: 0 0 10px 0;
+}
+
+.swagger-ui .opblock-tag:hover {
+    background: linear-gradient(135deg, #4a90a4 0%, #1b365d 100%);
+}
+
+/* Footer customization */
+.swagger-ui .info .info-contact:before {
+    content: '📧 ';
+}
+
+.swagger-ui .info .info-license:before {
+    content: '⚖️ ';
+}
+
+/* Scrollbar customization */
+.swagger-ui ::-webkit-scrollbar {
+    width: 8px;
+}
+
+.swagger-ui ::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.swagger-ui ::-webkit-scrollbar-thumb {
+    background: #4a90a4;
+    border-radius: 4px;
+}
+
+.swagger-ui ::-webkit-scrollbar-thumb:hover {
+    background: #1b365d;
+}
+
+/* Print styles */
+@media print {
+    .swagger-ui .topbar,
+    .swagger-ui .scheme-container {
+        display: none;
+    }
+    
+    .swagger-ui .info .title {
+        color: black;
+    }
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+    .swagger-ui .info .title {
+        font-size: 24px;
+    }
+    
+    .swagger-ui .opblock-summary {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .swagger-ui .opblock-summary-path {
+        margin-top: 10px;
+        word-break: break-all;
+    }
+}
