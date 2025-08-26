@@ -1,8 +1,8 @@
-# 高并发幂等性设计
+# 企业级幂等性设计
 
 ## 概述
 
-Integration Gateway的幂等性系统经过优化，支持高并发场景，确保在大量并发请求下的正确性和性能。
+Integration Gateway采用企业级幂等性系统，支持高并发场景，通过操作级锁定机制确保在大量并发请求下的正确性和性能。
 
 ## 🔧 技术实现
 
@@ -181,8 +181,8 @@ var (isExisting, operation) = await GetOrCreateOperationAsync(key, operation, bo
 
 ### 1. 中间件配置
 ```csharp
-// 在Program.cs中启用
-app.UseMiddleware<EnhancedIdempotencyMiddleware>();
+// 在Program.cs中启用企业级幂等性中间件
+app.UseMiddleware<IdempotencyMiddleware>();
 ```
 
 ### 2. 客户端实现

@@ -9,14 +9,14 @@ using Xunit.Abstractions;
 namespace IntegrationGateway.Tests.Services;
 
 /// <summary>
-/// Simplified high-concurrency idempotency tests
-/// Tests the core locking and concurrency logic without complex models
+/// Enterprise-grade idempotency tests
+/// Tests the core locking and concurrency logic for high-load scenarios
 /// </summary>
-public class EnhancedIdempotencyTests
+public class IdempotencyConcurrencyTests
 {
     private readonly ITestOutputHelper _output;
 
-    public EnhancedIdempotencyTests(ITestOutputHelper output)
+    public IdempotencyConcurrencyTests(ITestOutputHelper output)
     {
         _output = output;
     }
