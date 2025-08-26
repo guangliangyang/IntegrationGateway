@@ -125,7 +125,9 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 // Add custom middleware
-app.UseMiddleware<IdempotencyMiddleware>();
+// Use enhanced idempotency middleware for better concurrency support
+// app.UseMiddleware<IdempotencyMiddleware>(); // Basic version
+app.UseMiddleware<EnhancedIdempotencyMiddleware>(); // High-concurrency version
 
 app.MapControllers();
 
