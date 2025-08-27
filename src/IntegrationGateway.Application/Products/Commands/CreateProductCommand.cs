@@ -13,7 +13,6 @@ namespace IntegrationGateway.Application.Products.Commands;
 [Authorize]
 public record CreateProductCommand : IRequest<ProductDto>, ICacheInvalidating
 {
-    public required string IdempotencyKey { get; init; }
     public required string Name { get; init; }
     public string? Description { get; init; }
     public required decimal Price { get; init; }
@@ -35,12 +34,6 @@ public class CreateProductCommandValidator : AbstractValidator<CreateProductComm
 {
     public CreateProductCommandValidator()
     {
-        RuleFor(x => x.IdempotencyKey)
-            .NotEmpty()
-            .WithMessage("Idempotency key is required")
-            .MaximumLength(100)
-            .WithMessage("Idempotency key must not exceed 100 characters");
-
         RuleFor(x => x.Name)
             .NotEmpty()
             .WithMessage("Product name is required")
@@ -81,8 +74,7 @@ public class CreateProductCommandHandler : IRequestHandler<CreateProductCommand,
 
     public async Task<ProductDto> Handle(CreateProductCommand request, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Creating product: {ProductName}, IdempotencyKey: {IdempotencyKey}", 
-            request.Name, request.IdempotencyKey);
+        _logger.LogInformation("Creating product: {ProductName}", request.Name);
 
         var createRequest = new CreateProductRequest
         {
@@ -93,7 +85,7 @@ public class CreateProductCommandHandler : IRequestHandler<CreateProductCommand,
             IsActive = request.IsActive
         };
 
-        var product = await _productService.CreateProductAsync(createRequest, request.IdempotencyKey, cancellationToken);
+        var product = await _productService.CreateProductAsync(createRequest, cancellationToken);
 
         _logger.LogInformation("Created product: {ProductId}", product.Id);
 

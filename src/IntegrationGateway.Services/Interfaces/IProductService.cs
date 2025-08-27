@@ -13,9 +13,9 @@ public interface IProductService
     
     Task<ProductV2Dto?> GetProductV2Async(string productId, CancellationToken cancellationToken = default);
     
-    Task<ProductDto> CreateProductAsync(CreateProductRequest request, string idempotencyKey, CancellationToken cancellationToken = default);
+    Task<ProductDto> CreateProductAsync(CreateProductRequest request, CancellationToken cancellationToken = default);
     
-    Task<ProductDto> UpdateProductAsync(string productId, UpdateProductRequest request, string idempotencyKey, CancellationToken cancellationToken = default);
+    Task<ProductDto> UpdateProductAsync(string productId, UpdateProductRequest request, CancellationToken cancellationToken = default);
     
     Task<bool> DeleteProductAsync(string productId, CancellationToken cancellationToken = default);
 }

@@ -79,13 +79,8 @@ public class ProductsController : ControllerBase
         [FromBody] CreateProductRequest request,
         CancellationToken cancellationToken = default)
     {
-        var idempotencyKey = HttpContext.Items["IdempotencyKey"] as string;
-        if (string.IsNullOrEmpty(idempotencyKey))
-            return BadRequest("Idempotency-Key header is required for this operation");
-
         var command = new CreateProductCommand
         {
-            IdempotencyKey = idempotencyKey,
             Name = request.Name,
             Description = request.Description,
             Price = request.Price,
@@ -116,14 +111,9 @@ public class ProductsController : ControllerBase
         [FromBody] UpdateProductRequest request,
         CancellationToken cancellationToken = default)
     {
-        var idempotencyKey = HttpContext.Items["IdempotencyKey"] as string;
-        if (string.IsNullOrEmpty(idempotencyKey))
-            return BadRequest("Idempotency-Key header is required for this operation");
-
         var command = new UpdateProductCommand
         {
             Id = id,
-            IdempotencyKey = idempotencyKey,
             Name = request.Name,
             Description = request.Description,
             Price = request.Price,

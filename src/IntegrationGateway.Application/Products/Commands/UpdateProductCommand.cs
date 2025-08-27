@@ -14,7 +14,6 @@ namespace IntegrationGateway.Application.Products.Commands;
 public record UpdateProductCommand : IRequest<ProductDto>, ICacheInvalidating
 {
     public required string Id { get; init; }
-    public required string IdempotencyKey { get; init; }
     public string? Name { get; init; }
     public string? Description { get; init; }
     public decimal? Price { get; init; }
@@ -43,12 +42,6 @@ public class UpdateProductCommandValidator : AbstractValidator<UpdateProductComm
             .WithMessage("Product ID is required")
             .MaximumLength(50)
             .WithMessage("Product ID must not exceed 50 characters");
-
-        RuleFor(x => x.IdempotencyKey)
-            .NotEmpty()
-            .WithMessage("Idempotency key is required")
-            .MaximumLength(100)
-            .WithMessage("Idempotency key must not exceed 100 characters");
 
         RuleFor(x => x.Name)
             .MaximumLength(200)
@@ -90,8 +83,7 @@ public class UpdateProductCommandHandler : IRequestHandler<UpdateProductCommand,
 
     public async Task<ProductDto> Handle(UpdateProductCommand request, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Updating product: {ProductId}, IdempotencyKey: {IdempotencyKey}", 
-            request.Id, request.IdempotencyKey);
+        _logger.LogInformation("Updating product: {ProductId}", request.Id);
 
         var updateRequest = new UpdateProductRequest
         {
@@ -102,7 +94,7 @@ public class UpdateProductCommandHandler : IRequestHandler<UpdateProductCommand,
             IsActive = request.IsActive
         };
 
-        var product = await _productService.UpdateProductAsync(request.Id, updateRequest, request.IdempotencyKey, cancellationToken);
+        var product = await _productService.UpdateProductAsync(request.Id, updateRequest, cancellationToken);
 
         _logger.LogInformation("Updated product: {ProductId}", request.Id);
 

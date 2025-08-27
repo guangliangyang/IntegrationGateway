@@ -300,21 +300,9 @@ public class ProductService : IProductService
         }
     }
 
-    public async Task<ProductDto> CreateProductAsync(CreateProductRequest request, string idempotencyKey, CancellationToken cancellationToken = default)
+    public async Task<ProductDto> CreateProductAsync(CreateProductRequest request, CancellationToken cancellationToken = default)
     {
-        var bodyHash = IdempotencyKey.GenerateBodyHash(System.Text.Json.JsonSerializer.Serialize(request));
-        var operation = "CREATE_PRODUCT";
-
-        _logger.LogDebug("Creating product: {ProductName}, IdempotencyKey: {IdempotencyKey}", request.Name, idempotencyKey);
-
-        // Check idempotency
-        var existingOperation = await _idempotencyService.GetAsync(idempotencyKey, operation, bodyHash, cancellationToken);
-        if (existingOperation != null && !string.IsNullOrEmpty(existingOperation.ResponseBody))
-        {
-            _logger.LogDebug("Idempotent operation found for key: {IdempotencyKey}", idempotencyKey);
-            var existingProduct = System.Text.Json.JsonSerializer.Deserialize<ProductDto>(existingOperation.ResponseBody);
-            return existingProduct!;
-        }
+        _logger.LogDebug("Creating product: {ProductName}", request.Name);
 
         try
         {
@@ -343,17 +331,6 @@ public class ProductService : IProductService
 
             var product = MapToProductDto(erpResponse.Data, stock);
 
-            // Store idempotency result
-            var idempotencyRecord = new IdempotencyKey
-            {
-                Key = idempotencyKey,
-                Operation = operation,
-                BodyHash = bodyHash,
-                ResponseBody = System.Text.Json.JsonSerializer.Serialize(product),
-                ResponseStatusCode = 201
-            };
-            await _idempotencyService.SetAsync(idempotencyRecord, cancellationToken);
-
             // Invalidate cache
             await _cacheService.RemoveByPatternAsync("products:list", cancellationToken);
 
@@ -367,21 +344,9 @@ public class ProductService : IProductService
         }
     }
 
-    public async Task<ProductDto> UpdateProductAsync(string productId, UpdateProductRequest request, string idempotencyKey, CancellationToken cancellationToken = default)
+    public async Task<ProductDto> UpdateProductAsync(string productId, UpdateProductRequest request, CancellationToken cancellationToken = default)
     {
-        var bodyHash = IdempotencyKey.GenerateBodyHash(System.Text.Json.JsonSerializer.Serialize(request));
-        var operation = $"UPDATE_PRODUCT_{productId}";
-
-        _logger.LogDebug("Updating product: {ProductId}, IdempotencyKey: {IdempotencyKey}", productId, idempotencyKey);
-
-        // Check idempotency
-        var existingOperation = await _idempotencyService.GetAsync(idempotencyKey, operation, bodyHash, cancellationToken);
-        if (existingOperation != null && !string.IsNullOrEmpty(existingOperation.ResponseBody))
-        {
-            _logger.LogDebug("Idempotent operation found for key: {IdempotencyKey}", idempotencyKey);
-            var existingProduct = System.Text.Json.JsonSerializer.Deserialize<ProductDto>(existingOperation.ResponseBody);
-            return existingProduct!;
-        }
+        _logger.LogDebug("Updating product: {ProductId}", productId);
 
         try
         {
@@ -421,17 +386,6 @@ public class ProductService : IProductService
             var stock = stockResponse.Success ? stockResponse.Data : null;
 
             var product = MapToProductDto(erpResponse.Data, stock);
-
-            // Store idempotency result
-            var idempotencyRecord = new IdempotencyKey
-            {
-                Key = idempotencyKey,
-                Operation = operation,
-                BodyHash = bodyHash,
-                ResponseBody = System.Text.Json.JsonSerializer.Serialize(product),
-                ResponseStatusCode = 200
-            };
-            await _idempotencyService.SetAsync(idempotencyRecord, cancellationToken);
 
             // Invalidate cache
             await _cacheService.RemoveAsync($"product:detail:{productId}", cancellationToken);
