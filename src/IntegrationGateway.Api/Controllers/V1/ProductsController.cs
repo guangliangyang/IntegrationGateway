@@ -5,7 +5,7 @@ using IntegrationGateway.Application.Products.Commands;
 using IntegrationGateway.Application.Products.Queries;
 using MediatR;
 
-namespace IntegrationGateway.Controllers.V1;
+namespace IntegrationGateway.Api.Controllers.V1;
 
 [ApiController]
 [Route("api/v1/[controller]")]

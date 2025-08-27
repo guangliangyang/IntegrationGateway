@@ -15,7 +15,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "IntegrationGateway.Tests", 
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{827E0CD3-B72D-47B6-A68D-7590B98EB39B}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "IntegrationGateway", "src\IntegrationGateway\IntegrationGateway.csproj", "{2E44C1BF-4AC4-4509-B52C-0414686ACC77}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "IntegrationGateway.Api", "src\IntegrationGateway.Api\IntegrationGateway.Api.csproj", "{2E44C1BF-4AC4-4509-B52C-0414686ACC77}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "IntegrationGateway.Application", "src\IntegrationGateway.Application\IntegrationGateway.Application.csproj", "{E0A47787-9144-442A-A0A4-8DE4D7CF7631}"
 EndProject

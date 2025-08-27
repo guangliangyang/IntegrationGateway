@@ -3,7 +3,7 @@ using System.Text.Json;
 using IntegrationGateway.Models.Common;
 using IntegrationGateway.Services.Interfaces;
 
-namespace IntegrationGateway.Middleware;
+namespace IntegrationGateway.Api.Middleware;
 
 /// <summary>
 /// High-concurrency idempotency middleware with per-operation locking

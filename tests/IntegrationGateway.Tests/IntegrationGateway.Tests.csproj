@@ -25,7 +25,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\IntegrationGateway\IntegrationGateway.csproj" />
+    <ProjectReference Include="..\..\src\IntegrationGateway.Api\IntegrationGateway.Api.csproj" />
     <ProjectReference Include="..\..\src\IntegrationGateway.Services\IntegrationGateway.Services.csproj" />
     <ProjectReference Include="..\..\src\IntegrationGateway.Models\IntegrationGateway.Models.csproj" />
   </ItemGroup>

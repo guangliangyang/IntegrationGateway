@@ -5,7 +5,7 @@ using IntegrationGateway.Application.Products.Commands;
 using IntegrationGateway.Application.Products.Queries;
 using MediatR;
 
-namespace IntegrationGateway.Controllers.V2;
+namespace IntegrationGateway.Api.Controllers.V2;
 
 /// <summary>
 /// V2 Products Controller - Enhanced version with additional fields and batch operations

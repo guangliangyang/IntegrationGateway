@@ -2,7 +2,7 @@ using Microsoft.OpenApi.Models;
 using System.Reflection;
 using Swashbuckle.AspNetCore.SwaggerGen;
 
-namespace IntegrationGateway.Configuration;
+namespace IntegrationGateway.Api.Configuration;
 
 public static class SwaggerConfiguration
 {
