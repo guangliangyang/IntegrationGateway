@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using IntegrationGateway.Models.DTOs;
-using IntegrationGateway.Services.Interfaces;
+using IntegrationGateway.Application.Products.Commands;
+using IntegrationGateway.Application.Products.Queries;
+using MediatR;
 
 namespace IntegrationGateway.Controllers.V2;
 
@@ -15,8 +17,8 @@ namespace IntegrationGateway.Controllers.V2;
 [Produces("application/json")]
 public class ProductsController : V1.ProductsController
 {
-    public ProductsController(IProductService productService, ILogger<ProductsController> logger)
-        : base(productService, logger)
+    public ProductsController(IMediator mediator)
+        : base(mediator)
     {
     }
 
@@ -35,35 +37,9 @@ public class ProductsController : V1.ProductsController
         [FromQuery] int pageSize = 50,
         CancellationToken cancellationToken = default)
     {
-        try
-        {
-            // Validate parameters (same as V1)
-            if (page < 1) page = 1;
-            if (pageSize < 1 || pageSize > 100) pageSize = 50;
-
-            _logger.LogInformation("Getting products list V2 - Page: {Page}, Size: {PageSize}", page, pageSize);
-
-            // Use V2 service method for enhanced response
-            var response = await _productService.GetProductsV2Async(page, pageSize, cancellationToken);
-            
-            _logger.LogInformation("Retrieved {Count} products V2", response.Products.Count);
-            return Ok(response);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error getting products list V2");
-            
-            var errorResponse = new ErrorResponse
-            {
-                Type = "internal_error",
-                Title = "Internal Server Error",
-                Detail = "An unexpected error occurred while retrieving products",
-                Status = StatusCodes.Status500InternalServerError,
-                TraceId = HttpContext.TraceIdentifier
-            };
-            
-            return StatusCode(StatusCodes.Status500InternalServerError, errorResponse);
-        }
+        var query = new GetProductsV2Query(page, pageSize);
+        var response = await _mediator.Send(query, cancellationToken);
+        return Ok(response);
     }
 
     /// <summary>
@@ -80,47 +56,24 @@ public class ProductsController : V1.ProductsController
         string id,
         CancellationToken cancellationToken = default)
     {
-        try
+        var query = new GetProductV2Query(id);
+        var product = await _mediator.Send(query, cancellationToken);
+        
+        if (product == null)
         {
-            _logger.LogInformation("Getting product V2: {ProductId}", id);
-
-            // Use V2 service method for enhanced response
-            var product = await _productService.GetProductV2Async(id, cancellationToken);
-            
-            if (product == null)
+            var notFoundResponse = new ErrorResponse
             {
-                _logger.LogWarning("Product not found: {ProductId}", id);
-                
-                var notFoundResponse = new ErrorResponse
-                {
-                    Type = "not_found",
-                    Title = "Product Not Found",
-                    Detail = $"Product with ID '{id}' was not found",
-                    Status = StatusCodes.Status404NotFound,
-                    TraceId = HttpContext.TraceIdentifier
-                };
-                
-                return NotFound(notFoundResponse);
-            }
-
-            _logger.LogInformation("Retrieved product V2: {ProductId}", id);
-            return Ok(product);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error getting product V2: {ProductId}", id);
-            
-            var errorResponse = new ErrorResponse
-            {
-                Type = "internal_error",
-                Title = "Internal Server Error",
-                Detail = "An unexpected error occurred while retrieving the product",
-                Status = StatusCodes.Status500InternalServerError,
+                Type = "not_found",
+                Title = "Product Not Found",
+                Detail = $"Product with ID '{id}' was not found",
+                Status = StatusCodes.Status404NotFound,
                 TraceId = HttpContext.TraceIdentifier
             };
             
-            return StatusCode(StatusCodes.Status500InternalServerError, errorResponse);
+            return NotFound(notFoundResponse);
         }
+
+        return Ok(product);
     }
 
     /// <summary>
@@ -139,63 +92,36 @@ public class ProductsController : V1.ProductsController
         [FromBody] CreateProductRequest request,
         CancellationToken cancellationToken = default)
     {
-        try
+        var idempotencyKey = HttpContext.Items["IdempotencyKey"] as string;
+        if (string.IsNullOrEmpty(idempotencyKey))
         {
-            var idempotencyKey = HttpContext.Items["IdempotencyKey"] as string;
-            if (string.IsNullOrEmpty(idempotencyKey))
-            {
-                var errorResponse = new ErrorResponse
-                {
-                    Type = "missing_idempotency_key",
-                    Title = "Missing Idempotency Key",
-                    Detail = "Idempotency-Key header is required for this operation",
-                    Status = StatusCodes.Status400BadRequest,
-                    TraceId = HttpContext.TraceIdentifier
-                };
-                
-                return BadRequest(errorResponse);
-            }
-
-            _logger.LogInformation("Creating product V2: {ProductName}, IdempotencyKey: {IdempotencyKey}", 
-                request.Name, idempotencyKey);
-
-            // Create using V1 service, then get V2 representation
-            var v1Product = await _productService.CreateProductAsync(request, idempotencyKey, cancellationToken);
-            var v2Product = await _productService.GetProductV2Async(v1Product.Id, cancellationToken);
-            
-            _logger.LogInformation("Created product V2: {ProductId}", v1Product.Id);
-            return CreatedAtAction(nameof(GetProduct), new { id = v1Product.Id }, v2Product);
-        }
-        catch (InvalidOperationException ex)
-        {
-            _logger.LogWarning(ex, "Invalid operation creating product V2: {ProductName}", request.Name);
-            
             var errorResponse = new ErrorResponse
             {
-                Type = "invalid_operation",
-                Title = "Invalid Operation",
-                Detail = ex.Message,
+                Type = "missing_idempotency_key",
+                Title = "Missing Idempotency Key",
+                Detail = "Idempotency-Key header is required for this operation",
                 Status = StatusCodes.Status400BadRequest,
                 TraceId = HttpContext.TraceIdentifier
             };
             
             return BadRequest(errorResponse);
         }
-        catch (Exception ex)
+
+        var command = new CreateProductCommand
         {
-            _logger.LogError(ex, "Error creating product V2: {ProductName}", request.Name);
-            
-            var errorResponse = new ErrorResponse
-            {
-                Type = "internal_error",
-                Title = "Internal Server Error",
-                Detail = "An unexpected error occurred while creating the product",
-                Status = StatusCodes.Status500InternalServerError,
-                TraceId = HttpContext.TraceIdentifier
-            };
-            
-            return StatusCode(StatusCodes.Status500InternalServerError, errorResponse);
-        }
+            IdempotencyKey = idempotencyKey,
+            Name = request.Name,
+            Description = request.Description,
+            Price = request.Price,
+            Category = request.Category,
+            IsActive = request.IsActive
+        };
+        
+        var v1Product = await _mediator.Send(command, cancellationToken);
+        var v2Query = new GetProductV2Query(v1Product.Id);
+        var v2Product = await _mediator.Send(v2Query, cancellationToken);
+        
+        return CreatedAtAction(nameof(GetProduct), new { id = v1Product.Id }, v2Product);
     }
 
     /// <summary>
@@ -217,78 +143,37 @@ public class ProductsController : V1.ProductsController
         [FromBody] UpdateProductRequest request,
         CancellationToken cancellationToken = default)
     {
-        try
+        var idempotencyKey = HttpContext.Items["IdempotencyKey"] as string;
+        if (string.IsNullOrEmpty(idempotencyKey))
         {
-            var idempotencyKey = HttpContext.Items["IdempotencyKey"] as string;
-            if (string.IsNullOrEmpty(idempotencyKey))
-            {
-                var errorResponse = new ErrorResponse
-                {
-                    Type = "missing_idempotency_key",
-                    Title = "Missing Idempotency Key",
-                    Detail = "Idempotency-Key header is required for this operation",
-                    Status = StatusCodes.Status400BadRequest,
-                    TraceId = HttpContext.TraceIdentifier
-                };
-                
-                return BadRequest(errorResponse);
-            }
-
-            _logger.LogInformation("Updating product V2: {ProductId}, IdempotencyKey: {IdempotencyKey}", 
-                id, idempotencyKey);
-
-            // Update using V1 service, then get V2 representation
-            var v1Product = await _productService.UpdateProductAsync(id, request, idempotencyKey, cancellationToken);
-            var v2Product = await _productService.GetProductV2Async(id, cancellationToken);
-            
-            _logger.LogInformation("Updated product V2: {ProductId}", id);
-            return Ok(v2Product);
-        }
-        catch (InvalidOperationException ex) when (ex.Message.Contains("not found"))
-        {
-            _logger.LogWarning(ex, "Product not found for update V2: {ProductId}", id);
-            
-            var notFoundResponse = new ErrorResponse
-            {
-                Type = "not_found",
-                Title = "Product Not Found",
-                Detail = ex.Message,
-                Status = StatusCodes.Status404NotFound,
-                TraceId = HttpContext.TraceIdentifier
-            };
-            
-            return NotFound(notFoundResponse);
-        }
-        catch (InvalidOperationException ex)
-        {
-            _logger.LogWarning(ex, "Invalid operation updating product V2: {ProductId}", id);
-            
             var errorResponse = new ErrorResponse
             {
-                Type = "invalid_operation",
-                Title = "Invalid Operation",
-                Detail = ex.Message,
+                Type = "missing_idempotency_key",
+                Title = "Missing Idempotency Key",
+                Detail = "Idempotency-Key header is required for this operation",
                 Status = StatusCodes.Status400BadRequest,
                 TraceId = HttpContext.TraceIdentifier
             };
             
             return BadRequest(errorResponse);
         }
-        catch (Exception ex)
+
+        var command = new UpdateProductCommand
         {
-            _logger.LogError(ex, "Error updating product V2: {ProductId}", id);
-            
-            var errorResponse = new ErrorResponse
-            {
-                Type = "internal_error",
-                Title = "Internal Server Error",
-                Detail = "An unexpected error occurred while updating the product",
-                Status = StatusCodes.Status500InternalServerError,
-                TraceId = HttpContext.TraceIdentifier
-            };
-            
-            return StatusCode(StatusCodes.Status500InternalServerError, errorResponse);
-        }
+            Id = id,
+            IdempotencyKey = idempotencyKey,
+            Name = request.Name,
+            Description = request.Description,
+            Price = request.Price,
+            Category = request.Category,
+            IsActive = request.IsActive
+        };
+        
+        var v1Product = await _mediator.Send(command, cancellationToken);
+        var v2Query = new GetProductV2Query(id);
+        var v2Product = await _mediator.Send(v2Query, cancellationToken);
+        
+        return Ok(v2Product);
     }
 
     // DELETE method can be inherited from V1 since it has the same behavior
@@ -312,63 +197,57 @@ public class ProductsController : V1.ProductsController
         [FromBody] List<CreateProductRequest> requests,
         CancellationToken cancellationToken = default)
     {
-        try
+        var idempotencyKey = HttpContext.Items["IdempotencyKey"] as string;
+        if (string.IsNullOrEmpty(idempotencyKey))
         {
-            var idempotencyKey = HttpContext.Items["IdempotencyKey"] as string;
-            if (string.IsNullOrEmpty(idempotencyKey))
+            return BadRequest(new ErrorResponse
             {
-                return BadRequest(new ErrorResponse
-                {
-                    Type = "missing_idempotency_key",
-                    Title = "Missing Idempotency Key",
-                    Detail = "Idempotency-Key header is required for batch operations",
-                    Status = StatusCodes.Status400BadRequest,
-                    TraceId = HttpContext.TraceIdentifier
-                });
-            }
-
-            if (requests == null || !requests.Any())
-            {
-                return BadRequest(new ErrorResponse
-                {
-                    Type = "invalid_request",
-                    Title = "Invalid Request",
-                    Detail = "Request list cannot be empty",
-                    Status = StatusCodes.Status400BadRequest,
-                    TraceId = HttpContext.TraceIdentifier
-                });
-            }
-
-            _logger.LogInformation("Creating {Count} products in batch, IdempotencyKey: {IdempotencyKey}", 
-                requests.Count, idempotencyKey);
-
-            var results = new List<ProductV2Dto>();
-            for (int i = 0; i < requests.Count; i++)
-            {
-                var batchKey = $"{idempotencyKey}-batch-{i}";
-                var v1Product = await _productService.CreateProductAsync(requests[i], batchKey, cancellationToken);
-                var v2Product = await _productService.GetProductV2Async(v1Product.Id, cancellationToken);
-                if (v2Product != null)
-                {
-                    results.Add(v2Product);
-                }
-            }
-            
-            _logger.LogInformation("Created {Count} products in batch", results.Count);
-            return Created("batch", results);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error creating products batch");
-            return StatusCode(StatusCodes.Status500InternalServerError, new ErrorResponse
-            {
-                Type = "internal_error",
-                Title = "Internal Server Error",
-                Detail = "An unexpected error occurred while creating products in batch",
-                Status = StatusCodes.Status500InternalServerError,
+                Type = "missing_idempotency_key",
+                Title = "Missing Idempotency Key",
+                Detail = "Idempotency-Key header is required for batch operations",
+                Status = StatusCodes.Status400BadRequest,
                 TraceId = HttpContext.TraceIdentifier
             });
         }
+
+        if (requests == null || !requests.Any())
+        {
+            return BadRequest(new ErrorResponse
+            {
+                Type = "invalid_request",
+                Title = "Invalid Request",
+                Detail = "Request list cannot be empty",
+                Status = StatusCodes.Status400BadRequest,
+                TraceId = HttpContext.TraceIdentifier
+            });
+        }
+
+        var results = new List<ProductV2Dto>();
+        for (int i = 0; i < requests.Count; i++)
+        {
+            var batchKey = $"{idempotencyKey}-batch-{i}";
+            
+            var command = new CreateProductCommand
+            {
+                IdempotencyKey = batchKey,
+                Name = requests[i].Name,
+                Description = requests[i].Description,
+                Price = requests[i].Price,
+                Category = requests[i].Category,
+                IsActive = requests[i].IsActive
+            };
+            
+            var v1Product = await _mediator.Send(command, cancellationToken);
+            var v2Query = new GetProductV2Query(v1Product.Id);
+            var v2Product = await _mediator.Send(v2Query, cancellationToken);
+            
+            if (v2Product != null)
+            {
+                results.Add(v2Product);
+            }
+        }
+        
+        return Created("batch", results);
     }
 
     /// <summary>
@@ -385,38 +264,19 @@ public class ProductsController : V1.ProductsController
         string id,
         CancellationToken cancellationToken = default)
     {
-        try
+        // For now, return a simple history (this would typically use MediatR query)
+        var history = new ProductHistoryDto
         {
-            _logger.LogInformation("Getting product history V2: {ProductId}", id);
-
-            // For now, return a simple history (this would typically come from a service)
-            var history = new ProductHistoryDto
+            ProductId = id,
+            CreatedAt = DateTime.UtcNow.AddDays(-30),
+            LastModified = DateTime.UtcNow,
+            Versions = new List<ProductVersionDto>
             {
-                ProductId = id,
-                CreatedAt = DateTime.UtcNow.AddDays(-30),
-                LastModified = DateTime.UtcNow,
-                Versions = new List<ProductVersionDto>
-                {
-                    new() { Version = 1, ModifiedAt = DateTime.UtcNow.AddDays(-30), ModifiedBy = "System" },
-                    new() { Version = 2, ModifiedAt = DateTime.UtcNow, ModifiedBy = "API User" }
-                }
-            };
-            
-            _logger.LogInformation("Retrieved product history V2: {ProductId}", id);
-            return Ok(history);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error getting product history V2: {ProductId}", id);
-            
-            return StatusCode(StatusCodes.Status500InternalServerError, new ErrorResponse
-            {
-                Type = "internal_error",
-                Title = "Internal Server Error",
-                Detail = "An unexpected error occurred while retrieving product history",
-                Status = StatusCodes.Status500InternalServerError,
-                TraceId = HttpContext.TraceIdentifier
-            });
-        }
+                new() { Version = 1, ModifiedAt = DateTime.UtcNow.AddDays(-30), ModifiedBy = "System" },
+                new() { Version = 2, ModifiedAt = DateTime.UtcNow, ModifiedBy = "API User" }
+            }
+        };
+        
+        return Ok(history);
     }
 }

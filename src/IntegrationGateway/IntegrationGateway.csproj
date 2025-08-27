@@ -22,6 +22,7 @@
   <ItemGroup>
     <ProjectReference Include="..\IntegrationGateway.Models\IntegrationGateway.Models.csproj" />
     <ProjectReference Include="..\IntegrationGateway.Services\IntegrationGateway.Services.csproj" />
+    <ProjectReference Include="..\IntegrationGateway.Application\IntegrationGateway.Application.csproj" />
   </ItemGroup>
 
 </Project>

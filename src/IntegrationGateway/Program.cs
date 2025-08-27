@@ -15,6 +15,7 @@ using IntegrationGateway.Middleware;
 using IntegrationGateway.Services.Configuration;
 using IntegrationGateway.Services.Implementation;
 using IntegrationGateway.Services.Interfaces;
+using IntegrationGateway.Application;
 
 [assembly: InternalsVisibleTo("IntegrationGateway.Tests")]
 
@@ -89,6 +90,7 @@ builder.Services.AddScoped<IErpService, ErpService>();
 builder.Services.AddScoped<IWarehouseService, WarehouseService>();
 
 // Add application services
+builder.Services.AddApplicationServices(builder.Configuration);
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddSingleton<ICacheService, CacheService>();
 builder.Services.AddSingleton<IIdempotencyService, IdempotencyService>();
