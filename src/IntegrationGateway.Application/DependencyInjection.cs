@@ -27,19 +27,16 @@ public static class DependencyInjection
             // 1. Unhandled Exception Behavior (outermost - catches all exceptions)
             cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(UnhandledExceptionBehaviour<,>));
             
-            // 2. Authorization Behavior (check permissions early)
-            cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(AuthorizationBehaviour<,>));
-            
-            // 3. Validation Behavior (validate input before processing)
+            // 2. Validation Behavior (validate input before processing)
             cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(ValidationBehaviour<,>));
             
-            // 4. Performance Behavior (measure execution time)
+            // 3. Performance Behavior (measure execution time)
             cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(PerformanceBehaviour<,>));
             
-            // 5. Logging Behavior (log request/response details)
+            // 4. Logging Behavior (log request/response details)
             cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(LoggingBehaviour<,>));
             
-            // 6. Caching Behavior (cache responses - closest to handler)
+            // 5. Caching Behavior (cache responses - closest to handler)
             cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(CachingBehaviour<,>));
         });
 

@@ -1,5 +1,6 @@
 using FluentValidation;
 using IntegrationGateway.Application.Common.Behaviours;
+using IntegrationGateway.Application.Common.Interfaces;
 using IntegrationGateway.Services.Interfaces;
 using MediatR;
 using Microsoft.Extensions.Logging;
@@ -9,7 +10,6 @@ namespace IntegrationGateway.Application.Products.Commands;
 /// <summary>
 /// Command to delete a product (soft delete)
 /// </summary>
-[Authorize]
 public record DeleteProductCommand : IRequest<bool>, ICacheInvalidating
 {
     public required string Id { get; init; }
@@ -45,17 +45,23 @@ public class DeleteProductCommandValidator : AbstractValidator<DeleteProductComm
 public class DeleteProductCommandHandler : IRequestHandler<DeleteProductCommand, bool>
 {
     private readonly IProductService _productService;
+    private readonly ICurrentUserService _currentUser;
     private readonly ILogger<DeleteProductCommandHandler> _logger;
 
-    public DeleteProductCommandHandler(IProductService productService, ILogger<DeleteProductCommandHandler> logger)
+    public DeleteProductCommandHandler(
+        IProductService productService,
+        ICurrentUserService currentUser,
+        ILogger<DeleteProductCommandHandler> logger)
     {
         _productService = productService;
+        _currentUser = currentUser;
         _logger = logger;
     }
 
     public async Task<bool> Handle(DeleteProductCommand request, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Deleting product: {ProductId}", request.Id);
+        _logger.LogInformation("User {UserId} deleting product: {ProductId}", 
+            _currentUser.UserId ?? "Unknown", request.Id);
 
         var success = await _productService.DeleteProductAsync(request.Id, cancellationToken);
 

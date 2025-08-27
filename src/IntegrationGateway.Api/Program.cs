@@ -55,6 +55,10 @@ builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddSingleton<ICacheService, CacheService>();
 builder.Services.AddSingleton<IIdempotencyService, IdempotencyService>();
 
+// Add HttpContextAccessor and CurrentUser service
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<IntegrationGateway.Application.Common.Interfaces.ICurrentUserService, IntegrationGateway.Api.Services.CurrentUserService>();
+
 // Add JWT authentication
 builder.Services.AddJwtAuthentication(builder.Configuration);
 

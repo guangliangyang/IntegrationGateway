@@ -1,5 +1,6 @@
 using FluentValidation;
 using IntegrationGateway.Application.Common.Behaviours;
+using IntegrationGateway.Application.Common.Interfaces;
 using IntegrationGateway.Models.DTOs;
 using IntegrationGateway.Services.Interfaces;
 using MediatR;
@@ -10,7 +11,6 @@ namespace IntegrationGateway.Application.Products.Commands;
 /// <summary>
 /// Command to create a new product
 /// </summary>
-[Authorize]
 public record CreateProductCommand : IRequest<ProductDto>, ICacheInvalidating
 {
     public required string Name { get; init; }
@@ -64,17 +64,23 @@ public class CreateProductCommandValidator : AbstractValidator<CreateProductComm
 public class CreateProductCommandHandler : IRequestHandler<CreateProductCommand, ProductDto>
 {
     private readonly IProductService _productService;
+    private readonly ICurrentUserService _currentUser;
     private readonly ILogger<CreateProductCommandHandler> _logger;
 
-    public CreateProductCommandHandler(IProductService productService, ILogger<CreateProductCommandHandler> logger)
+    public CreateProductCommandHandler(
+        IProductService productService,
+        ICurrentUserService currentUser,
+        ILogger<CreateProductCommandHandler> logger)
     {
         _productService = productService;
+        _currentUser = currentUser;
         _logger = logger;
     }
 
     public async Task<ProductDto> Handle(CreateProductCommand request, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Creating product: {ProductName}", request.Name);
+        _logger.LogInformation("User {UserId} creating product: {ProductName}", 
+            _currentUser.UserId ?? "Unknown", request.Name);
 
         var createRequest = new CreateProductRequest
         {

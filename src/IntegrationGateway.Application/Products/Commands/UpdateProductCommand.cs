@@ -1,5 +1,6 @@
 using FluentValidation;
 using IntegrationGateway.Application.Common.Behaviours;
+using IntegrationGateway.Application.Common.Interfaces;
 using IntegrationGateway.Models.DTOs;
 using IntegrationGateway.Services.Interfaces;
 using MediatR;
@@ -10,7 +11,6 @@ namespace IntegrationGateway.Application.Products.Commands;
 /// <summary>
 /// Command to update an existing product
 /// </summary>
-[Authorize]
 public record UpdateProductCommand : IRequest<ProductDto>, ICacheInvalidating
 {
     public required string Id { get; init; }
@@ -73,17 +73,23 @@ public class UpdateProductCommandValidator : AbstractValidator<UpdateProductComm
 public class UpdateProductCommandHandler : IRequestHandler<UpdateProductCommand, ProductDto>
 {
     private readonly IProductService _productService;
+    private readonly ICurrentUserService _currentUser;
     private readonly ILogger<UpdateProductCommandHandler> _logger;
 
-    public UpdateProductCommandHandler(IProductService productService, ILogger<UpdateProductCommandHandler> logger)
+    public UpdateProductCommandHandler(
+        IProductService productService,
+        ICurrentUserService currentUser,
+        ILogger<UpdateProductCommandHandler> logger)
     {
         _productService = productService;
+        _currentUser = currentUser;
         _logger = logger;
     }
 
     public async Task<ProductDto> Handle(UpdateProductCommand request, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Updating product: {ProductId}", request.Id);
+        _logger.LogInformation("User {UserId} updating product: {ProductId}", 
+            _currentUser.UserId ?? "Unknown", request.Id);
 
         var updateRequest = new UpdateProductRequest
         {
