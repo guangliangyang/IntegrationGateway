@@ -60,18 +60,7 @@ public class ProductsController : V1.ProductsController
         var product = await _mediator.Send(query, cancellationToken);
         
         if (product == null)
-        {
-            var notFoundResponse = new ErrorResponse
-            {
-                Type = "not_found",
-                Title = "Product Not Found",
-                Detail = $"Product with ID '{id}' was not found",
-                Status = StatusCodes.Status404NotFound,
-                TraceId = HttpContext.TraceIdentifier
-            };
-            
-            return NotFound(notFoundResponse);
-        }
+            return NotFound();
 
         return Ok(product);
     }
@@ -94,18 +83,7 @@ public class ProductsController : V1.ProductsController
     {
         var idempotencyKey = HttpContext.Items["IdempotencyKey"] as string;
         if (string.IsNullOrEmpty(idempotencyKey))
-        {
-            var errorResponse = new ErrorResponse
-            {
-                Type = "missing_idempotency_key",
-                Title = "Missing Idempotency Key",
-                Detail = "Idempotency-Key header is required for this operation",
-                Status = StatusCodes.Status400BadRequest,
-                TraceId = HttpContext.TraceIdentifier
-            };
-            
-            return BadRequest(errorResponse);
-        }
+            return BadRequest("Idempotency-Key header is required for this operation");
 
         var command = new CreateProductCommand
         {
@@ -145,18 +123,7 @@ public class ProductsController : V1.ProductsController
     {
         var idempotencyKey = HttpContext.Items["IdempotencyKey"] as string;
         if (string.IsNullOrEmpty(idempotencyKey))
-        {
-            var errorResponse = new ErrorResponse
-            {
-                Type = "missing_idempotency_key",
-                Title = "Missing Idempotency Key",
-                Detail = "Idempotency-Key header is required for this operation",
-                Status = StatusCodes.Status400BadRequest,
-                TraceId = HttpContext.TraceIdentifier
-            };
-            
-            return BadRequest(errorResponse);
-        }
+            return BadRequest("Idempotency-Key header is required for this operation");
 
         var command = new UpdateProductCommand
         {
