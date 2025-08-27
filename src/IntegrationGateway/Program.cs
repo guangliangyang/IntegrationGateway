@@ -6,6 +6,10 @@ using Microsoft.AspNetCore.Mvc.ApiExplorer;
 using Microsoft.AspNetCore.Mvc.Versioning;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using Microsoft.Extensions.Options;
+using Polly;
+using Polly.Extensions.Http;
+using Polly.CircuitBreaker;
 using IntegrationGateway.Configuration;
 using IntegrationGateway.Middleware;
 using IntegrationGateway.Services.Configuration;
@@ -44,9 +48,45 @@ builder.Services.AddVersionedApiExplorer(options =>
     options.SubstituteApiVersionInUrl = true;
 });
 
-// Add HTTP clients
-builder.Services.AddHttpClient<IErpService, ErpService>();
-builder.Services.AddHttpClient<IWarehouseService, WarehouseService>();
+// Add HTTP clients with centralized resilience policies
+var erpOptions = builder.Configuration.GetSection(ErpServiceOptions.SectionName).Get<ErpServiceOptions>();
+var warehouseOptions = builder.Configuration.GetSection(WarehouseServiceOptions.SectionName).Get<WarehouseServiceOptions>();
+
+// Configure ERP HTTP client with policies
+builder.Services.AddHttpClient("ErpClient", client =>
+{
+    client.BaseAddress = new Uri(erpOptions?.BaseUrl ?? "http://localhost:5001");
+    client.Timeout = TimeSpan.FromSeconds(erpOptions?.TimeoutSeconds ?? 30);
+    if (!string.IsNullOrEmpty(erpOptions?.ApiKey))
+    {
+        client.DefaultRequestHeaders.Add("X-API-Key", erpOptions.ApiKey);
+    }
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+    client.DefaultRequestHeaders.Add("User-Agent", "IntegrationGateway/1.0");
+})
+.AddPolicyHandler(GetRetryPolicy(erpOptions?.MaxRetries ?? 3))
+.AddPolicyHandler(GetCircuitBreakerPolicy())
+.AddPolicyHandler(GetTimeoutPolicy(erpOptions?.TimeoutSeconds ?? 30));
+
+// Configure Warehouse HTTP client with policies
+builder.Services.AddHttpClient("WarehouseClient", client =>
+{
+    client.BaseAddress = new Uri(warehouseOptions?.BaseUrl ?? "http://localhost:5002");
+    client.Timeout = TimeSpan.FromSeconds(warehouseOptions?.TimeoutSeconds ?? 30);
+    if (!string.IsNullOrEmpty(warehouseOptions?.ApiKey))
+    {
+        client.DefaultRequestHeaders.Add("X-API-Key", warehouseOptions.ApiKey);
+    }
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+    client.DefaultRequestHeaders.Add("User-Agent", "IntegrationGateway/1.0");
+})
+.AddPolicyHandler(GetRetryPolicy(warehouseOptions?.MaxRetries ?? 3))
+.AddPolicyHandler(GetCircuitBreakerPolicy())
+.AddPolicyHandler(GetTimeoutPolicy(warehouseOptions?.TimeoutSeconds ?? 30));
+
+// Register services with IHttpClientFactory
+builder.Services.AddScoped<IErpService, ErpService>();
+builder.Services.AddScoped<IWarehouseService, WarehouseService>();
 
 // Add application services
 builder.Services.AddScoped<IProductService, ProductService>();
@@ -157,5 +197,33 @@ app.MapGet("/", () => new
 });
 
 app.Run();
+
+// Centralized Polly Policy Definitions
+static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy(int maxRetries)
+{
+    return HttpPolicyExtensions
+        .HandleTransientHttpError()
+        .OrResult(msg => !msg.IsSuccessStatusCode)
+        .WaitAndRetryAsync(
+            retryCount: maxRetries,
+            sleepDurationProvider: retryAttempt =>
+                TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)) +
+                TimeSpan.FromMilliseconds(Random.Shared.Next(0, 100))); // Jitter
+}
+
+static IAsyncPolicy<HttpResponseMessage> GetCircuitBreakerPolicy()
+{
+    return HttpPolicyExtensions
+        .HandleTransientHttpError()
+        .OrResult(msg => !msg.IsSuccessStatusCode)
+        .CircuitBreakerAsync(
+            handledEventsAllowedBeforeBreaking: 5,
+            durationOfBreak: TimeSpan.FromMinutes(1));
+}
+
+static IAsyncPolicy<HttpResponseMessage> GetTimeoutPolicy(int timeoutSeconds)
+{
+    return Policy.TimeoutAsync<HttpResponseMessage>(timeoutSeconds);
+}
 
 public partial class Program { }
