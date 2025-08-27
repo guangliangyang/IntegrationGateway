@@ -133,7 +133,7 @@ public class ErpService : IErpService
                 RequestId = Guid.NewGuid().ToString()
             };
         }
-        catch (CircuitBreakerRejectedException)
+        catch (BrokenCircuitException)
         {
             _logger.LogError("ERP service circuit breaker is open for product {ProductId}", productId);
             return new ErpResponse<ErpProduct>
@@ -192,7 +192,7 @@ public class ErpService : IErpService
                 RequestId = Guid.NewGuid().ToString()
             };
         }
-        catch (CircuitBreakerRejectedException)
+        catch (BrokenCircuitException)
         {
             _logger.LogError("ERP service circuit breaker is open for products list");
             return new ErpResponse<List<ErpProduct>>

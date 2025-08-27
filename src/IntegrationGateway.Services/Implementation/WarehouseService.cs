@@ -141,7 +141,7 @@ public class WarehouseService : IWarehouseService
                 RequestId = Guid.NewGuid().ToString()
             };
         }
-        catch (CircuitBreakerRejectedException)
+        catch (BrokenCircuitException)
         {
             _logger.LogWarning("Warehouse service circuit breaker is open for stock {ProductId}, returning default", productId);
             
@@ -220,7 +220,7 @@ public class WarehouseService : IWarehouseService
                 RequestId = Guid.NewGuid().ToString()
             };
         }
-        catch (CircuitBreakerRejectedException)
+        catch (BrokenCircuitException)
         {
             _logger.LogWarning("Warehouse service circuit breaker is open for bulk stock, returning defaults");
             

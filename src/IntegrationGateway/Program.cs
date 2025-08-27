@@ -1,6 +1,9 @@
+using System.Runtime.CompilerServices;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ApiExplorer;
+using Microsoft.AspNetCore.Mvc.Versioning;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using IntegrationGateway.Configuration;
@@ -8,6 +11,8 @@ using IntegrationGateway.Middleware;
 using IntegrationGateway.Services.Configuration;
 using IntegrationGateway.Services.Implementation;
 using IntegrationGateway.Services.Interfaces;
+
+[assembly: InternalsVisibleTo("IntegrationGateway.Tests")]
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -152,3 +157,5 @@ app.MapGet("/", () => new
 });
 
 app.Run();
+
+public partial class Program { }

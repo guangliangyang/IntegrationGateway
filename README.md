@@ -52,6 +52,27 @@ This project demonstrates a production-ready integration gateway with the follow
 - **Microsoft.Extensions.Caching.Memory** - Thread-safe caching
 - **Microsoft.Extensions.Http** - Typed HTTP clients
 
+## 技术选型说明
+
+### 为什么选择C#/.NET?
+
+#### 1. 技术需求匹配
+- **企业集成场景**: .NET在企业系统集成领域有成熟的生态系统和丰富的库支持
+- **弹性模式支持**: Polly库提供完整的重试、熔断器、超时等弹性策略实现
+- **高并发处理**: 优秀的async/await异步编程模型，ConcurrentDictionary等线程安全集合
+- **API开发生态**: ASP.NET Core提供现代化、高性能的Web API开发框架
+
+#### 2. 岗位要求契合  
+- **面试岗位**: 这是.NET Developer/Senior Integration Engineer职位的技术测试
+- **技能展示**: 通过.NET技术栈展示相关技术深度和企业级开发最佳实践
+- **评估便利**: 面试官更容易评估候选人的.NET相关技能水平和经验
+
+#### 3. 企业技术体系对齐
+- **技术栈统一**: 企业内部基于.NET技术体系，保持技术选型的一致性
+- **团队协作**: 现有开发团队对.NET生态更加熟悉，降低学习成本和维护成本
+- **系统集成**: 更容易与企业现有的.NET服务和基础设施进行无缝集成
+- **运维标准化**: 统一的部署流水线、监控工具链和问题调试方式
+
 ## Key Features
 
 ### 🔄 Resilience Patterns
@@ -72,10 +93,100 @@ This project demonstrates a production-ready integration gateway with the follow
 - **Pattern Removal**: Bulk cache invalidation by pattern
 - **Memory Efficient**: Automatic eviction based on priority
 
-### 📚 API Versioning
-- **Backward Compatible**: v2 adds fields without breaking v1
-- **Content Negotiation**: Version selection via URL path
-- **OpenAPI Support**: Separate specifications for v1 and v2
+### 📚 API Versioning - 继承式架构设计
+
+#### 设计理念
+采用继承模式实现API版本演进，确保向后兼容的同时支持功能扩展：
+
+- **继承架构**: V2继承V1控制器，V3继承V2，以此类推
+- **代码复用**: 新版本自动继承旧版本的所有功能
+- **向后兼容**: 旧版本API保持完全不变
+- **易于维护**: 每个版本的修改都是独立且清晰的
+
+#### 实现架构
+
+```csharp
+// V1 控制器 - 基础版本
+[Route("api/v1/[controller]")]
+public class ProductsController : ControllerBase
+{
+    // 所有方法标记为 virtual 支持继承
+    public virtual async Task<ActionResult<ProductDto>> GetProduct(string id)
+    {
+        // V1 实现
+    }
+}
+
+// V2 控制器 - 继承V1并扩展
+[Route("api/v2/[controller]")]  
+public class ProductsController : V1.ProductsController
+{
+    // 重写方法返回增强响应
+    public override async Task<ActionResult<ProductDto>> GetProduct(string id)
+    {
+        var v2Product = await _productService.GetProductV2Async(id);
+        return Ok(v2Product); // 返回V2格式数据
+    }
+    
+    // 新增V2专属功能
+    [HttpPost("batch")]
+    public async Task<ActionResult<List<ProductV2Dto>>> CreateProductsBatch(...)
+    {
+        // V2新功能实现
+    }
+}
+```
+
+#### 版本扩展策略
+
+**添加新版本的标准流程:**
+
+1. **创建新控制器继承前版本**:
+```csharp
+[Route("api/v3/[controller]")]
+public class ProductsController : V2.ProductsController
+{
+    public ProductsController(IProductService productService, ILogger<ProductsController> logger)
+        : base(productService, logger) { }
+}
+```
+
+2. **重写需要修改的方法**:
+```csharp
+public override async Task<ActionResult<ProductDto>> GetProduct(string id)
+{
+    // V3 特定的增强逻辑
+    var v3Product = await _productService.GetProductV3Async(id);
+    return Ok(v3Product);
+}
+```
+
+3. **添加新的端点功能**:
+```csharp
+[HttpGet("{id}/analytics")]  // V3新功能
+public async Task<ActionResult<ProductAnalyticsDto>> GetProductAnalytics(string id)
+{
+    // V3专属功能
+}
+```
+
+#### 实现优势
+
+- **开闭原则**: 对扩展开放，对修改关闭
+- **单一职责**: 每个版本只关注其特定的变更
+- **代码清晰**: 版本差异一目了然
+- **测试简单**: 可以独立测试每个版本的特定功能
+- **无限扩展**: 支持 V1 → V2 → V3 → V4... 任意多版本
+
+#### 版本访问方式
+- **URL路径**: `/api/v1/products`, `/api/v2/products`
+- **查询参数**: `?version=1.0`, `?version=2.0`  
+- **HTTP头部**: `X-API-Version: 1.0`
+
+#### OpenAPI支持
+每个版本都有独立的Swagger文档：
+- V1: `/swagger/v1/swagger.json`
+- V2: `/swagger/v2/swagger.json`
 
 ## Getting Started
 

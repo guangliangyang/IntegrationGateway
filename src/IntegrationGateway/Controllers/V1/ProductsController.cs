@@ -11,8 +11,8 @@ namespace IntegrationGateway.Controllers.V1;
 [Produces("application/json")]
 public class ProductsController : ControllerBase
 {
-    private readonly IProductService _productService;
-    private readonly ILogger<ProductsController> _logger;
+    protected readonly IProductService _productService;
+    protected readonly ILogger<ProductsController> _logger;
 
     public ProductsController(IProductService productService, ILogger<ProductsController> logger)
     {
@@ -30,7 +30,7 @@ public class ProductsController : ControllerBase
     [HttpGet]
     [ProducesResponseType(typeof(ProductListResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-    public async Task<ActionResult<ProductListResponse>> GetProducts(
+    public virtual async Task<ActionResult<ProductListResponse>> GetProducts(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 50,
         CancellationToken cancellationToken = default)
@@ -75,7 +75,7 @@ public class ProductsController : ControllerBase
     [ProducesResponseType(typeof(ProductDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-    public async Task<ActionResult<ProductDto>> GetProduct(
+    public virtual async Task<ActionResult<ProductDto>> GetProduct(
         string id,
         CancellationToken cancellationToken = default)
     {
@@ -133,7 +133,7 @@ public class ProductsController : ControllerBase
     [ProducesResponseType(typeof(ValidationErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-    public async Task<ActionResult<ProductDto>> CreateProduct(
+    public virtual async Task<ActionResult<ProductDto>> CreateProduct(
         [FromBody] CreateProductRequest request,
         CancellationToken cancellationToken = default)
     {
@@ -208,7 +208,7 @@ public class ProductsController : ControllerBase
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-    public async Task<ActionResult<ProductDto>> UpdateProduct(
+    public virtual async Task<ActionResult<ProductDto>> UpdateProduct(
         string id,
         [FromBody] UpdateProductRequest request,
         CancellationToken cancellationToken = default)
@@ -297,7 +297,7 @@ public class ProductsController : ControllerBase
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-    public async Task<IActionResult> DeleteProduct(
+    public virtual async Task<IActionResult> DeleteProduct(
         string id,
         CancellationToken cancellationToken = default)
     {
