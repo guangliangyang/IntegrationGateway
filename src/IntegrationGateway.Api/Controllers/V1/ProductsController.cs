@@ -35,7 +35,7 @@ public class ProductsController : ControllerBase
         [FromQuery] int pageSize = 50,
         CancellationToken cancellationToken = default)
     {
-        var query = new GetProductsQuery(page, pageSize);
+        var query = new GetProductsV1Query(page, pageSize);
         var response = await _mediator.Send(query, cancellationToken);
         return Ok(response);
     }

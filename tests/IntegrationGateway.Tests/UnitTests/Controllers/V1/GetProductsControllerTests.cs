@@ -61,7 +61,7 @@ public class GetProductsControllerTests
         };
 
         _mockMediator
-            .Setup(m => m.Send(It.Is<GetProductsQuery>(q => q.Page == 1 && q.PageSize == 50), It.IsAny<CancellationToken>()))
+            .Setup(m => m.Send(It.Is<GetProductsV1Query>(q => q.Page == 1 && q.PageSize == 50), It.IsAny<CancellationToken>()))
             .ReturnsAsync(expectedResponse);
 
         // Act
@@ -74,7 +74,7 @@ public class GetProductsControllerTests
         var okResult = result.Result as OkObjectResult;
         okResult!.Value.Should().BeEquivalentTo(expectedResponse);
 
-        _mockMediator.Verify(m => m.Send(It.Is<GetProductsQuery>(q => q.Page == 1 && q.PageSize == 50), It.IsAny<CancellationToken>()), Times.Once);
+        _mockMediator.Verify(m => m.Send(It.Is<GetProductsV1Query>(q => q.Page == 1 && q.PageSize == 50), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -93,7 +93,7 @@ public class GetProductsControllerTests
         };
 
         _mockMediator
-            .Setup(m => m.Send(It.Is<GetProductsQuery>(q => q.Page == customPage && q.PageSize == customPageSize), It.IsAny<CancellationToken>()))
+            .Setup(m => m.Send(It.Is<GetProductsV1Query>(q => q.Page == customPage && q.PageSize == customPageSize), It.IsAny<CancellationToken>()))
             .ReturnsAsync(expectedResponse);
 
         // Act
@@ -106,7 +106,7 @@ public class GetProductsControllerTests
         var okResult = result.Result as OkObjectResult;
         okResult!.Value.Should().BeEquivalentTo(expectedResponse);
 
-        _mockMediator.Verify(m => m.Send(It.Is<GetProductsQuery>(q => q.Page == customPage && q.PageSize == customPageSize), It.IsAny<CancellationToken>()), Times.Once);
+        _mockMediator.Verify(m => m.Send(It.Is<GetProductsV1Query>(q => q.Page == customPage && q.PageSize == customPageSize), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -125,7 +125,7 @@ public class GetProductsControllerTests
         };
 
         _mockMediator
-            .Setup(m => m.Send(It.IsAny<GetProductsQuery>(), cancellationToken))
+            .Setup(m => m.Send(It.IsAny<GetProductsV1Query>(), cancellationToken))
             .ReturnsAsync(expectedResponse);
 
         // Act
@@ -135,7 +135,7 @@ public class GetProductsControllerTests
         result.Should().NotBeNull();
         result.Result.Should().BeOfType<OkObjectResult>();
 
-        _mockMediator.Verify(m => m.Send(It.IsAny<GetProductsQuery>(), cancellationToken), Times.Once);
+        _mockMediator.Verify(m => m.Send(It.IsAny<GetProductsV1Query>(), cancellationToken), Times.Once);
     }
 
     [Fact]
@@ -165,7 +165,7 @@ public class GetProductsControllerTests
         };
 
         _mockMediator
-            .Setup(m => m.Send(It.Is<GetProductsQuery>(q => q.Page == 1 && q.PageSize == 100), It.IsAny<CancellationToken>()))
+            .Setup(m => m.Send(It.Is<GetProductsV1Query>(q => q.Page == 1 && q.PageSize == 100), It.IsAny<CancellationToken>()))
             .ReturnsAsync(expectedResponse);
 
         // Act
@@ -197,7 +197,7 @@ public class GetProductsControllerTests
         };
 
         _mockMediator
-            .Setup(m => m.Send(It.IsAny<GetProductsQuery>(), It.IsAny<CancellationToken>()))
+            .Setup(m => m.Send(It.IsAny<GetProductsV1Query>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(expectedResponse);
 
         // Act
@@ -232,7 +232,7 @@ public class GetProductsControllerTests
         };
 
         _mockMediator
-            .Setup(m => m.Send(It.Is<GetProductsQuery>(q => q.Page == page && q.PageSize == pageSize), It.IsAny<CancellationToken>()))
+            .Setup(m => m.Send(It.Is<GetProductsV1Query>(q => q.Page == page && q.PageSize == pageSize), It.IsAny<CancellationToken>()))
             .ReturnsAsync(expectedResponse);
 
         // Act
@@ -242,7 +242,7 @@ public class GetProductsControllerTests
         result.Should().NotBeNull();
         result.Result.Should().BeOfType<OkObjectResult>();
 
-        _mockMediator.Verify(m => m.Send(It.Is<GetProductsQuery>(q => q.Page == page && q.PageSize == pageSize), It.IsAny<CancellationToken>()), Times.Once);
+        _mockMediator.Verify(m => m.Send(It.Is<GetProductsV1Query>(q => q.Page == page && q.PageSize == pageSize), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -252,7 +252,7 @@ public class GetProductsControllerTests
         var expectedException = new InvalidOperationException("Database connection failed");
 
         _mockMediator
-            .Setup(m => m.Send(It.IsAny<GetProductsQuery>(), It.IsAny<CancellationToken>()))
+            .Setup(m => m.Send(It.IsAny<GetProductsV1Query>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(expectedException);
 
         // Act & Assert
@@ -262,7 +262,7 @@ public class GetProductsControllerTests
         exception.Should().BeSameAs(expectedException);
         exception.Message.Should().Be("Database connection failed");
 
-        _mockMediator.Verify(m => m.Send(It.IsAny<GetProductsQuery>(), It.IsAny<CancellationToken>()), Times.Once);
+        _mockMediator.Verify(m => m.Send(It.IsAny<GetProductsV1Query>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -273,21 +273,21 @@ public class GetProductsControllerTests
         cts.Cancel();
 
         _mockMediator
-            .Setup(m => m.Send(It.IsAny<GetProductsQuery>(), It.IsAny<CancellationToken>()))
+            .Setup(m => m.Send(It.IsAny<GetProductsV1Query>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new OperationCanceledException());
 
         // Act & Assert
         await Assert.ThrowsAsync<OperationCanceledException>(
             () => _controller.GetProducts(cancellationToken: cts.Token));
 
-        _mockMediator.Verify(m => m.Send(It.IsAny<GetProductsQuery>(), It.IsAny<CancellationToken>()), Times.Once);
+        _mockMediator.Verify(m => m.Send(It.IsAny<GetProductsV1Query>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
     public void GetProductsQuery_ShouldHaveCacheableAttribute()
     {
         // Arrange & Act
-        var queryType = typeof(GetProductsQuery);
+        var queryType = typeof(GetProductsV1Query);
         var cacheableAttribute = queryType.GetCustomAttributes(typeof(IntegrationGateway.Application.Common.Behaviours.CacheableAttribute), false)
             .FirstOrDefault() as IntegrationGateway.Application.Common.Behaviours.CacheableAttribute;
 
