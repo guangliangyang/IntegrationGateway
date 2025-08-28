@@ -6,6 +6,7 @@ using Microsoft.IdentityModel.Tokens;
 using Polly;
 using Polly.Extensions.Http;
 using IntegrationGateway.Api.Configuration;
+using IntegrationGateway.Api.Services;
 using IntegrationGateway.Services.Configuration;
 
 namespace IntegrationGateway.Api.Extensions;
@@ -40,7 +41,7 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Configure HTTP clients with resilience policies
+    /// Configure HTTP clients with resilience policies and SSRF protection
     /// </summary>
     public static IServiceCollection AddHttpClients(this IServiceCollection services, IConfiguration configuration)
     {
@@ -48,26 +49,70 @@ public static class ServiceCollectionExtensions
         var warehouseOptions = configuration.GetSection(WarehouseServiceOptions.SectionName).Get<WarehouseServiceOptions>();
         var circuitBreakerOptions = configuration.GetSection(CircuitBreakerOptions.SectionName).Get<CircuitBreakerOptions>();
         var httpClientOptions = configuration.GetSection(HttpClientOptions.SectionName).Get<HttpClientOptions>();
+        
+        // Register URL validation service and SSRF protection handler
+        services.AddSingleton<IUrlValidationService, UrlValidationService>();
+        services.AddTransient<SsrfProtectionHandler>();
 
-        // Configure ERP HTTP client
+        // Configure ERP HTTP client with SSRF protection
         services.AddHttpClient("ErpClient", client =>
             ConfigureHttpClient(client, erpOptions?.BaseUrl ?? Environment.GetEnvironmentVariable("ERP_BASE_URL") ?? "http://localhost:5001", 
                               erpOptions?.TimeoutSeconds ?? httpClientOptions?.DefaultConnectionTimeoutSeconds ?? 30, 
                               erpOptions?.ApiKey, httpClientOptions))
+            .AddHttpMessageHandler<SsrfProtectionHandler>()
             .AddPolicyHandler(GetRetryPolicy(erpOptions?.MaxRetries ?? 3))
             .AddPolicyHandler(GetCircuitBreakerPolicy(circuitBreakerOptions))
             .AddPolicyHandler(GetTimeoutPolicy(erpOptions?.TimeoutSeconds ?? httpClientOptions?.DefaultRequestTimeoutSeconds ?? 30));
 
-        // Configure Warehouse HTTP client
+        // Configure Warehouse HTTP client with SSRF protection
         services.AddHttpClient("WarehouseClient", client =>
             ConfigureHttpClient(client, warehouseOptions?.BaseUrl ?? Environment.GetEnvironmentVariable("WAREHOUSE_BASE_URL") ?? "http://localhost:5002",
                               warehouseOptions?.TimeoutSeconds ?? httpClientOptions?.DefaultConnectionTimeoutSeconds ?? 30, 
                               warehouseOptions?.ApiKey, httpClientOptions))
+            .AddHttpMessageHandler<SsrfProtectionHandler>()
             .AddPolicyHandler(GetRetryPolicy(warehouseOptions?.MaxRetries ?? 3))
             .AddPolicyHandler(GetCircuitBreakerPolicy(circuitBreakerOptions))
             .AddPolicyHandler(GetTimeoutPolicy(warehouseOptions?.TimeoutSeconds ?? httpClientOptions?.DefaultRequestTimeoutSeconds ?? 30));
 
         return services;
+    }
+    
+    /// <summary>
+    /// HTTP message handler for SSRF protection
+    /// </summary>
+    public class SsrfProtectionHandler : DelegatingHandler
+    {
+        private readonly IUrlValidationService _urlValidationService;
+        private readonly ILogger<SsrfProtectionHandler> _logger;
+
+        public SsrfProtectionHandler(
+            IUrlValidationService urlValidationService,
+            ILogger<SsrfProtectionHandler> logger)
+        {
+            _urlValidationService = urlValidationService;
+            _logger = logger;
+        }
+
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            if (request.RequestUri == null)
+            {
+                _logger.LogError("HTTP request has no URI");
+                throw new InvalidOperationException("Request URI cannot be null");
+            }
+
+            // Validate URL before making the request
+            var isUrlSafe = await _urlValidationService.IsUrlSafeAsync(request.RequestUri);
+            if (!isUrlSafe)
+            {
+                _logger.LogWarning("Blocked potentially unsafe URL: {Url}", request.RequestUri);
+                throw new HttpRequestException($"Request to '{request.RequestUri}' was blocked by SSRF protection");
+            }
+
+            return await base.SendAsync(request, cancellationToken);
+        }
     }
 
     /// <summary>

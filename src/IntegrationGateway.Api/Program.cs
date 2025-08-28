@@ -1,7 +1,9 @@
 using System.Runtime.CompilerServices;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ApiExplorer;
 using Microsoft.AspNetCore.Mvc.Versioning;
+using Microsoft.AspNetCore.RateLimiting;
 using IntegrationGateway.Api.Configuration;
 using IntegrationGateway.Api.Middleware;
 using IntegrationGateway.Api.Extensions;
@@ -22,6 +24,9 @@ builder.AddApplicationInsights();
 
 // Add configuration validation
 builder.AddConfigurationValidation();
+
+// Add security configuration
+builder.Services.Configure<SecurityOptions>(builder.Configuration.GetSection(SecurityOptions.SectionName));
 
 // Add configuration
 builder.Services.Configure<ErpServiceOptions>(builder.Configuration.GetSection(ErpServiceOptions.SectionName));
@@ -78,14 +83,128 @@ builder.Services.ConfigureSwagger();
 // Add health checks
 builder.Services.AddHealthChecks();
 
-// Add CORS
+// Configure Kestrel server limits
+builder.Services.Configure<Microsoft.AspNetCore.Server.Kestrel.Core.KestrelServerOptions>(options =>
+{
+    var securityOptions = builder.Configuration.GetSection(SecurityOptions.SectionName).Get<SecurityOptions>();
+    var requestLimits = securityOptions?.RequestLimits ?? new RequestLimitsOptions();
+    
+    options.Limits.MaxRequestBodySize = requestLimits.MaxRequestBodySize;
+    options.Limits.MaxRequestLineSize = requestLimits.MaxRequestLineSize;
+    options.Limits.MaxRequestHeaderCount = requestLimits.MaxRequestHeaders;
+    options.Limits.MaxRequestHeadersTotalSize = requestLimits.MaxRequestHeadersTotalSize;
+});
+
+// Configure form options
+builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
+{
+    var securityOptions = builder.Configuration.GetSection(SecurityOptions.SectionName).Get<SecurityOptions>();
+    var requestLimits = securityOptions?.RequestLimits ?? new RequestLimitsOptions();
+    
+    options.MultipartBodyLengthLimit = requestLimits.MaxRequestFormSize;
+    options.ValueLengthLimit = requestLimits.MaxRequestFormSize;
+});
+
+// Add rate limiting
+builder.Services.AddRateLimiter(options =>
+{
+    var securityConfig = builder.Configuration.GetSection(SecurityOptions.SectionName).Get<SecurityOptions>();
+    var rateLimitConfig = securityConfig?.RateLimiting ?? new RateLimitingOptions();
+    
+    if (!rateLimitConfig.Enabled)
+    {
+        options.GlobalLimiter = PartitionedRateLimiter.CreateChained<HttpContext>();
+        return;
+    }
+
+    // General API rate limiting by IP
+    options.AddFixedWindowLimiter("GeneralApi", limiterOptions =>
+    {
+        limiterOptions.PermitLimit = rateLimitConfig.GeneralApi.PermitLimit;
+        limiterOptions.Window = rateLimitConfig.GeneralApi.Window;
+        limiterOptions.QueueLimit = rateLimitConfig.GeneralApi.QueueLimit;
+        limiterOptions.AutoReplenishment = rateLimitConfig.GeneralApi.AutoReplenishment.HasValue;
+    });
+    
+    // Authentication rate limiting by IP
+    options.AddFixedWindowLimiter("Authentication", limiterOptions =>
+    {
+        limiterOptions.PermitLimit = rateLimitConfig.Authentication.PermitLimit;
+        limiterOptions.Window = rateLimitConfig.Authentication.Window;
+        limiterOptions.QueueLimit = rateLimitConfig.Authentication.QueueLimit;
+        limiterOptions.AutoReplenishment = rateLimitConfig.Authentication.AutoReplenishment.HasValue;
+    });
+    
+    // Write operations rate limiting by user
+    options.AddFixedWindowLimiter("WriteOperations", limiterOptions =>
+    {
+        limiterOptions.PermitLimit = rateLimitConfig.WriteOperations.PermitLimit;
+        limiterOptions.Window = rateLimitConfig.WriteOperations.Window;
+        limiterOptions.QueueLimit = rateLimitConfig.WriteOperations.QueueLimit;
+        limiterOptions.AutoReplenishment = rateLimitConfig.WriteOperations.AutoReplenishment.HasValue;
+    });
+    
+    // Global limiter - applies GeneralApi policy to all requests by default
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: partition => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = rateLimitConfig.GeneralApi.PermitLimit,
+                Window = rateLimitConfig.GeneralApi.Window,
+                QueueLimit = rateLimitConfig.GeneralApi.QueueLimit,
+                AutoReplenishment = rateLimitConfig.GeneralApi.AutoReplenishment.HasValue
+            }));
+    
+    options.OnRejected = async (context, token) =>
+    {
+        context.HttpContext.Response.StatusCode = 429;
+        context.HttpContext.Response.ContentType = "application/json";
+        
+        var response = new
+        {
+            type = "rate_limit_exceeded",
+            title = "Too Many Requests",
+            detail = "Rate limit exceeded. Please try again later.",
+            status = 429,
+            traceId = context.HttpContext.TraceIdentifier
+        };
+        
+        await context.HttpContext.Response.WriteAsync(
+            System.Text.Json.JsonSerializer.Serialize(response, new System.Text.Json.JsonSerializerOptions
+            {
+                PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
+            }), token);
+    };
+});
+
+// Add CORS with security-enhanced configuration
 builder.Services.AddCors(options =>
 {
+    var securityOptions = builder.Configuration.GetSection(SecurityOptions.SectionName).Get<SecurityOptions>();
+    var corsOptions = securityOptions?.Cors ?? new CorsOptions();
+    
     options.AddDefaultPolicy(policy =>
     {
-        policy.AllowAnyHeader()
-              .AllowAnyMethod()
-              .AllowAnyOrigin();
+        if (corsOptions.AllowedOrigins?.Length > 0)
+        {
+            policy.WithOrigins(corsOptions.AllowedOrigins);
+        }
+        else
+        {
+            // Fallback for development - still restrictive
+            policy.WithOrigins("https://localhost:3000", "https://localhost:3001");
+        }
+        
+        policy.AllowAnyMethod()
+              .AllowAnyHeader();
+              
+        if (corsOptions.AllowCredentials)
+        {
+            policy.AllowCredentials();
+        }
+        
+        policy.SetPreflightMaxAge(TimeSpan.FromSeconds(corsOptions.PreflightMaxAge));
     });
 });
 
@@ -121,6 +240,9 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+// Add rate limiting middleware
+app.UseRateLimiter();
 
 app.UseCors();
 
