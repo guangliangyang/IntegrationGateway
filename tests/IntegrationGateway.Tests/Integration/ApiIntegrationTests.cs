@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
 using System.Net;
 using FluentAssertions;
 using System.Text.Json;
@@ -15,7 +16,21 @@ public class ApiIntegrationTests : IClassFixture<WebApplicationFactory<Program>>
 
     public ApiIntegrationTests(WebApplicationFactory<Program> factory)
     {
-        _factory = factory;
+        _factory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureAppConfiguration((context, config) =>
+            {
+                // Override configuration for testing
+                config.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["Jwt:SecretKey"] = "TestSecretKeyForIntegrationTestsThatIsSufficientlyLong123456",
+                    ["ApplicationInsights:ConnectionString"] = "",
+                    ["KeyVault:VaultUri"] = "",
+                    ["ErpService:ApiKey"] = "test-erp-key",
+                    ["WarehouseService:ApiKey"] = "test-warehouse-key"
+                });
+            });
+        });
         _client = _factory.CreateClient();
     }
 
@@ -37,8 +52,10 @@ public class ApiIntegrationTests : IClassFixture<WebApplicationFactory<Program>>
         // Act
         var response = await _client.GetAsync("/api/v1/products");
 
-        // Assert - Should return 401 Unauthorized due to JWT requirement
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        // Assert - GET endpoint should be accessible without authorization
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var content = await response.Content.ReadAsStringAsync();
+        content.Should().NotBeEmpty();
     }
 
     [Fact]
@@ -47,8 +64,10 @@ public class ApiIntegrationTests : IClassFixture<WebApplicationFactory<Program>>
         // Act
         var response = await _client.GetAsync("/api/v2/products");
 
-        // Assert - Should return 401 Unauthorized due to JWT requirement
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        // Assert - GET endpoint should be accessible without authorization
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var content = await response.Content.ReadAsStringAsync();
+        content.Should().NotBeEmpty();
     }
 
     [Fact]
@@ -60,7 +79,7 @@ public class ApiIntegrationTests : IClassFixture<WebApplicationFactory<Program>>
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var content = await response.Content.ReadAsStringAsync();
-        content.Should().Contain("Swagger");
+        content.Should().Contain("Integration Gateway API Documentation");
     }
 
     [Fact]
@@ -111,8 +130,7 @@ public class ApiIntegrationTests : IClassFixture<WebApplicationFactory<Program>>
         // Act
         var response = await _client.PostAsync("/api/v1/products", content);
 
-        // Assert - Should return 401 Unauthorized first due to JWT requirement
-        // but the idempotency middleware should kick in if auth was bypassed
+        // Assert - POST endpoint should require authorization
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 

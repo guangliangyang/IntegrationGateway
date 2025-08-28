@@ -14,12 +14,21 @@ using IntegrationGateway.Application;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Add Azure Key Vault configuration
+builder.AddAzureKeyVault();
+
+// Add Application Insights telemetry
+builder.AddApplicationInsights();
+
+// Add configuration validation
+builder.AddConfigurationValidation();
+
 // Add configuration
 builder.Services.Configure<ErpServiceOptions>(builder.Configuration.GetSection(ErpServiceOptions.SectionName));
 builder.Services.Configure<WarehouseServiceOptions>(builder.Configuration.GetSection(WarehouseServiceOptions.SectionName));
 builder.Services.Configure<CacheOptions>(builder.Configuration.GetSection(CacheOptions.SectionName));
 builder.Services.Configure<CircuitBreakerOptions>(builder.Configuration.GetSection(CircuitBreakerOptions.SectionName));
-builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
+builder.Services.Configure<HttpClientOptions>(builder.Configuration.GetSection(HttpClientOptions.SectionName));
 
 // Add services to the container
 builder.Services.AddControllers();

@@ -17,7 +17,6 @@ public class ProductService : IProductService
     private readonly IIdempotencyService _idempotencyService;
     private readonly ILogger<ProductService> _logger;
     private readonly CacheOptions _cacheOptions;
-
     public ProductService(
         IErpService erpService,
         IWarehouseService warehouseService,
@@ -450,28 +449,21 @@ public class ProductService : IProductService
 
     private static string GenerateSupplierInfo(string category)
     {
-        // Simple supplier mapping based on category
-        return category.ToLowerInvariant() switch
-        {
-            "electronics" => "TechSupplier Inc",
-            "clothing" => "Fashion Wholesale Ltd",
-            "books" => "BookDistributor Co",
-            "food" => "Fresh Foods Supply",
-            _ => "General Supplier"
-        };
+        // Simplified: return a generic supplier name
+        // In a real system, this information should come from the ERP system
+        return "Default Supplier";
     }
 
     private static List<string> GenerateTags(string category, string name)
     {
+        // Simplified: return basic tags based on category and name
         var tags = new List<string> { category.ToLowerInvariant() };
         
-        // Add some intelligent tags based on name
-        if (name.ToLowerInvariant().Contains("premium"))
-            tags.Add("premium");
-        if (name.ToLowerInvariant().Contains("eco") || name.ToLowerInvariant().Contains("green"))
-            tags.Add("eco-friendly");
-        if (name.ToLowerInvariant().Contains("sale") || name.ToLowerInvariant().Contains("discount"))
-            tags.Add("on-sale");
+        // Add simple name-based tags if needed
+        var nameLower = name.ToLowerInvariant();
+        if (nameLower.Contains("premium")) tags.Add("premium");
+        if (nameLower.Contains("eco") || nameLower.Contains("green")) tags.Add("eco-friendly");
+        if (nameLower.Contains("sale") || nameLower.Contains("discount")) tags.Add("on-sale");
         
         return tags;
     }

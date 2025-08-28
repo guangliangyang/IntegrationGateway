@@ -10,7 +10,7 @@ public class IdempotencyKey
     
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     
-    public TimeSpan ExpiresIn { get; set; } = TimeSpan.FromHours(24);
+    public TimeSpan ExpiresIn { get; set; } = TimeSpan.FromHours(1);
     
     public string? ResponseBody { get; set; }
     

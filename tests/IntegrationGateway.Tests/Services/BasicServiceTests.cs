@@ -1,8 +1,10 @@
 using IntegrationGateway.Models.DTOs;
 using IntegrationGateway.Models.Common;
 using IntegrationGateway.Services.Implementation;
+using IntegrationGateway.Services.Configuration;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Moq;
 using FluentAssertions;
 
@@ -145,9 +147,11 @@ public class BasicServiceTests
         // Arrange
         var memoryCache = new MemoryCache(new MemoryCacheOptions());
         var logger = new Mock<ILogger<CacheService>>();
+        var cacheOptions = new Mock<IOptions<CacheOptions>>();
+        cacheOptions.Setup(x => x.Value).Returns(new CacheOptions());
 
         // Act
-        var cacheService = new CacheService(memoryCache, logger.Object);
+        var cacheService = new CacheService(memoryCache, logger.Object, cacheOptions.Object);
 
         // Assert
         cacheService.Should().NotBeNull();
@@ -159,7 +163,9 @@ public class BasicServiceTests
         // Arrange
         var memoryCache = new MemoryCache(new MemoryCacheOptions());
         var logger = new Mock<ILogger<CacheService>>();
-        var cacheService = new CacheService(memoryCache, logger.Object);
+        var cacheOptions = new Mock<IOptions<CacheOptions>>();
+        cacheOptions.Setup(x => x.Value).Returns(new CacheOptions());
+        var cacheService = new CacheService(memoryCache, logger.Object, cacheOptions.Object);
         const string key = "test-key";
         const string value = "test-value";
 
@@ -177,7 +183,9 @@ public class BasicServiceTests
         // Arrange
         var memoryCache = new MemoryCache(new MemoryCacheOptions());
         var logger = new Mock<ILogger<CacheService>>();
-        var cacheService = new CacheService(memoryCache, logger.Object);
+        var cacheOptions = new Mock<IOptions<CacheOptions>>();
+        cacheOptions.Setup(x => x.Value).Returns(new CacheOptions());
+        var cacheService = new CacheService(memoryCache, logger.Object, cacheOptions.Object);
 
         // Act
         var result = await cacheService.GetAsync<string>("non-existent-key");
@@ -192,7 +200,9 @@ public class BasicServiceTests
         // Arrange
         var memoryCache = new MemoryCache(new MemoryCacheOptions());
         var logger = new Mock<ILogger<CacheService>>();
-        var cacheService = new CacheService(memoryCache, logger.Object);
+        var cacheOptions = new Mock<IOptions<CacheOptions>>();
+        cacheOptions.Setup(x => x.Value).Returns(new CacheOptions());
+        var cacheService = new CacheService(memoryCache, logger.Object, cacheOptions.Object);
         const string key = "test-key";
         const string value = "test-value";
 

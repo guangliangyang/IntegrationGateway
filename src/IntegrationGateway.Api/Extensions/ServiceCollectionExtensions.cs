@@ -45,22 +45,26 @@ public static class ServiceCollectionExtensions
     {
         var erpOptions = configuration.GetSection(ErpServiceOptions.SectionName).Get<ErpServiceOptions>();
         var warehouseOptions = configuration.GetSection(WarehouseServiceOptions.SectionName).Get<WarehouseServiceOptions>();
+        var circuitBreakerOptions = configuration.GetSection(CircuitBreakerOptions.SectionName).Get<CircuitBreakerOptions>();
+        var httpClientOptions = configuration.GetSection(HttpClientOptions.SectionName).Get<HttpClientOptions>();
 
         // Configure ERP HTTP client
         services.AddHttpClient("ErpClient", client =>
-            ConfigureHttpClient(client, erpOptions?.BaseUrl ?? "http://localhost:5001", 
-                              erpOptions?.TimeoutSeconds ?? 30, erpOptions?.ApiKey))
+            ConfigureHttpClient(client, erpOptions?.BaseUrl ?? Environment.GetEnvironmentVariable("ERP_BASE_URL") ?? "http://localhost:5001", 
+                              erpOptions?.TimeoutSeconds ?? httpClientOptions?.DefaultConnectionTimeoutSeconds ?? 30, 
+                              erpOptions?.ApiKey, httpClientOptions))
             .AddPolicyHandler(GetRetryPolicy(erpOptions?.MaxRetries ?? 3))
-            .AddPolicyHandler(GetCircuitBreakerPolicy())
-            .AddPolicyHandler(GetTimeoutPolicy(erpOptions?.TimeoutSeconds ?? 30));
+            .AddPolicyHandler(GetCircuitBreakerPolicy(circuitBreakerOptions))
+            .AddPolicyHandler(GetTimeoutPolicy(erpOptions?.TimeoutSeconds ?? httpClientOptions?.DefaultRequestTimeoutSeconds ?? 30));
 
         // Configure Warehouse HTTP client
         services.AddHttpClient("WarehouseClient", client =>
-            ConfigureHttpClient(client, warehouseOptions?.BaseUrl ?? "http://localhost:5002",
-                              warehouseOptions?.TimeoutSeconds ?? 30, warehouseOptions?.ApiKey))
+            ConfigureHttpClient(client, warehouseOptions?.BaseUrl ?? Environment.GetEnvironmentVariable("WAREHOUSE_BASE_URL") ?? "http://localhost:5002",
+                              warehouseOptions?.TimeoutSeconds ?? httpClientOptions?.DefaultConnectionTimeoutSeconds ?? 30, 
+                              warehouseOptions?.ApiKey, httpClientOptions))
             .AddPolicyHandler(GetRetryPolicy(warehouseOptions?.MaxRetries ?? 3))
-            .AddPolicyHandler(GetCircuitBreakerPolicy())
-            .AddPolicyHandler(GetTimeoutPolicy(warehouseOptions?.TimeoutSeconds ?? 30));
+            .AddPolicyHandler(GetCircuitBreakerPolicy(circuitBreakerOptions))
+            .AddPolicyHandler(GetTimeoutPolicy(warehouseOptions?.TimeoutSeconds ?? httpClientOptions?.DefaultRequestTimeoutSeconds ?? 30));
 
         return services;
     }
@@ -68,7 +72,7 @@ public static class ServiceCollectionExtensions
     /// <summary>
     /// Configure common HTTP client settings
     /// </summary>
-    private static void ConfigureHttpClient(HttpClient client, string baseUrl, int timeoutSeconds, string? apiKey)
+    private static void ConfigureHttpClient(HttpClient client, string baseUrl, int timeoutSeconds, string? apiKey, HttpClientOptions? httpClientOptions)
     {
         client.BaseAddress = new Uri(baseUrl);
         client.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
@@ -78,8 +82,21 @@ public static class ServiceCollectionExtensions
             client.DefaultRequestHeaders.Add("X-API-Key", apiKey);
         }
         
-        client.DefaultRequestHeaders.Add("Accept", "application/json");
-        client.DefaultRequestHeaders.Add("User-Agent", "IntegrationGateway/1.0");
+        // Use configurable headers
+        var acceptHeader = httpClientOptions?.AcceptHeader ?? "application/json";
+        var userAgent = httpClientOptions?.UserAgent ?? "IntegrationGateway/1.0";
+        
+        client.DefaultRequestHeaders.Add("Accept", acceptHeader);
+        client.DefaultRequestHeaders.Add("User-Agent", userAgent);
+        
+        // Add custom headers from configuration
+        if (httpClientOptions?.DefaultHeaders != null)
+        {
+            foreach (var header in httpClientOptions.DefaultHeaders)
+            {
+                client.DefaultRequestHeaders.Add(header.Key, header.Value);
+            }
+        }
     }
 
     /// <summary>
@@ -100,14 +117,17 @@ public static class ServiceCollectionExtensions
     /// <summary>
     /// Get circuit breaker policy
     /// </summary>
-    private static IAsyncPolicy<HttpResponseMessage> GetCircuitBreakerPolicy()
+    private static IAsyncPolicy<HttpResponseMessage> GetCircuitBreakerPolicy(CircuitBreakerOptions? options)
     {
+        var failureThreshold = options?.FailureThreshold ?? 5;
+        var breakDuration = options?.BreakDuration ?? TimeSpan.FromMinutes(1);
+        
         return HttpPolicyExtensions
             .HandleTransientHttpError()
             .OrResult(msg => !msg.IsSuccessStatusCode)
             .CircuitBreakerAsync(
-                handledEventsAllowedBeforeBreaking: 5,
-                durationOfBreak: TimeSpan.FromMinutes(1));
+                handledEventsAllowedBeforeBreaking: failureThreshold,
+                durationOfBreak: breakDuration);
     }
 
     /// <summary>
