@@ -76,7 +76,7 @@ public static class ConfigurationExtensions
                 options.EnableDependencyTrackingTelemetryModule = appInsightsOptions.EnableDependencyTracking;
             });
 
-            // Configure telemetry
+            // Configure basic telemetry
             builder.Services.Configure<TelemetryConfiguration>(config =>
             {
                 // Set cloud role name for distributed tracing
