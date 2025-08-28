@@ -5,6 +5,11 @@ public class IdempotencyOptions
     public const string SectionName = "Idempotency";
     
     /// <summary>
+    /// Whether idempotency middleware is enabled
+    /// </summary>
+    public bool Enabled { get; set; } = true;
+    
+    /// <summary>
     /// Default expiration time for idempotency operations
     /// </summary>
     public TimeSpan DefaultExpirationTime { get; set; } = TimeSpan.FromHours(24);

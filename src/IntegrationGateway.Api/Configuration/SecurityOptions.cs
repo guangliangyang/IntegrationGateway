@@ -36,6 +36,11 @@ public class SecurityOptions
 public class CorsOptions
 {
     /// <summary>
+    /// Whether CORS is enabled
+    /// </summary>
+    public bool Enabled { get; set; } = true;
+
+    /// <summary>
     /// Allowed origins for CORS
     /// </summary>
     [Required]

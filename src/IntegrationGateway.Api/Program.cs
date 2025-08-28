@@ -11,8 +11,12 @@ using IntegrationGateway.Services.Configuration;
 using IntegrationGateway.Services.Implementation;
 using IntegrationGateway.Services.Interfaces;
 using IntegrationGateway.Application;
+using DotNetEnv;
 
 [assembly: InternalsVisibleTo("IntegrationGateway.Tests")]
+
+// Load environment variables from .env file
+Env.Load();
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -31,13 +35,12 @@ builder.Services.Configure<SecurityOptions>(builder.Configuration.GetSection(Sec
 // Add configuration
 builder.Services.Configure<ErpServiceOptions>(builder.Configuration.GetSection(ErpServiceOptions.SectionName));
 builder.Services.Configure<WarehouseServiceOptions>(builder.Configuration.GetSection(WarehouseServiceOptions.SectionName));
-builder.Services.Configure<CacheOptions>(builder.Configuration.GetSection(CacheOptions.SectionName));
 builder.Services.Configure<CircuitBreakerOptions>(builder.Configuration.GetSection(CircuitBreakerOptions.SectionName));
 builder.Services.Configure<HttpClientOptions>(builder.Configuration.GetSection(HttpClientOptions.SectionName));
 
 // Add services to the container
 builder.Services.AddControllers();
-builder.Services.AddMemoryCache();
+
 
 // Add API versioning
 builder.Services.AddApiVersioning(options =>
@@ -56,7 +59,8 @@ builder.Services.AddVersionedApiExplorer(options =>
     options.SubstituteApiVersionInUrl = true;
 });
 
-// Add HTTP clients with centralized resilience policies
+// Add HTTP clients with SSRF protection
+builder.Services.AddConfiguredSsrfProtection(builder.Configuration);
 builder.Services.AddHttpClients(builder.Configuration);
 
 // Register services with IHttpClientFactory
@@ -66,7 +70,6 @@ builder.Services.AddScoped<IWarehouseService, WarehouseService>();
 // Add application services
 builder.Services.AddApplicationServices(builder.Configuration);
 builder.Services.AddScoped<IProductService, ProductService>();
-builder.Services.AddSingleton<ICacheService, CacheService>();
 builder.Services.AddSingleton<IIdempotencyService, IdempotencyService>();
 
 // Add HttpContextAccessor and CurrentUser service
@@ -83,130 +86,29 @@ builder.Services.ConfigureSwagger();
 // Add health checks
 builder.Services.AddHealthChecks();
 
-// Configure Kestrel server limits
+// Configure request size limits
+var securityOptions = builder.Configuration.GetSection(SecurityOptions.SectionName).Get<SecurityOptions>();
+var requestLimits = securityOptions?.RequestLimits ?? new RequestLimitsOptions();
+
 builder.Services.Configure<Microsoft.AspNetCore.Server.Kestrel.Core.KestrelServerOptions>(options =>
 {
-    var securityOptions = builder.Configuration.GetSection(SecurityOptions.SectionName).Get<SecurityOptions>();
-    var requestLimits = securityOptions?.RequestLimits ?? new RequestLimitsOptions();
-    
     options.Limits.MaxRequestBodySize = requestLimits.MaxRequestBodySize;
     options.Limits.MaxRequestLineSize = requestLimits.MaxRequestLineSize;
     options.Limits.MaxRequestHeaderCount = requestLimits.MaxRequestHeaders;
     options.Limits.MaxRequestHeadersTotalSize = requestLimits.MaxRequestHeadersTotalSize;
 });
 
-// Configure form options
 builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
 {
-    var securityOptions = builder.Configuration.GetSection(SecurityOptions.SectionName).Get<SecurityOptions>();
-    var requestLimits = securityOptions?.RequestLimits ?? new RequestLimitsOptions();
-    
     options.MultipartBodyLengthLimit = requestLimits.MaxRequestFormSize;
     options.ValueLengthLimit = requestLimits.MaxRequestFormSize;
 });
 
-// Add rate limiting
-builder.Services.AddRateLimiter(options =>
-{
-    var securityConfig = builder.Configuration.GetSection(SecurityOptions.SectionName).Get<SecurityOptions>();
-    var rateLimitConfig = securityConfig?.RateLimiting ?? new RateLimitingOptions();
-    
-    if (!rateLimitConfig.Enabled)
-    {
-        options.GlobalLimiter = PartitionedRateLimiter.CreateChained<HttpContext>();
-        return;
-    }
+// Add security features conditionally
+builder.Services.AddConfiguredRateLimiting(builder.Configuration);
+builder.Services.AddConfiguredCors(builder.Configuration);
 
-    // General API rate limiting by IP
-    options.AddFixedWindowLimiter("GeneralApi", limiterOptions =>
-    {
-        limiterOptions.PermitLimit = rateLimitConfig.GeneralApi.PermitLimit;
-        limiterOptions.Window = rateLimitConfig.GeneralApi.Window;
-        limiterOptions.QueueLimit = rateLimitConfig.GeneralApi.QueueLimit;
-        limiterOptions.AutoReplenishment = rateLimitConfig.GeneralApi.AutoReplenishment.HasValue;
-    });
-    
-    // Authentication rate limiting by IP
-    options.AddFixedWindowLimiter("Authentication", limiterOptions =>
-    {
-        limiterOptions.PermitLimit = rateLimitConfig.Authentication.PermitLimit;
-        limiterOptions.Window = rateLimitConfig.Authentication.Window;
-        limiterOptions.QueueLimit = rateLimitConfig.Authentication.QueueLimit;
-        limiterOptions.AutoReplenishment = rateLimitConfig.Authentication.AutoReplenishment.HasValue;
-    });
-    
-    // Write operations rate limiting by user
-    options.AddFixedWindowLimiter("WriteOperations", limiterOptions =>
-    {
-        limiterOptions.PermitLimit = rateLimitConfig.WriteOperations.PermitLimit;
-        limiterOptions.Window = rateLimitConfig.WriteOperations.Window;
-        limiterOptions.QueueLimit = rateLimitConfig.WriteOperations.QueueLimit;
-        limiterOptions.AutoReplenishment = rateLimitConfig.WriteOperations.AutoReplenishment.HasValue;
-    });
-    
-    // Global limiter - applies GeneralApi policy to all requests by default
-    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-            factory: partition => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = rateLimitConfig.GeneralApi.PermitLimit,
-                Window = rateLimitConfig.GeneralApi.Window,
-                QueueLimit = rateLimitConfig.GeneralApi.QueueLimit,
-                AutoReplenishment = rateLimitConfig.GeneralApi.AutoReplenishment.HasValue
-            }));
-    
-    options.OnRejected = async (context, token) =>
-    {
-        context.HttpContext.Response.StatusCode = 429;
-        context.HttpContext.Response.ContentType = "application/json";
-        
-        var response = new
-        {
-            type = "rate_limit_exceeded",
-            title = "Too Many Requests",
-            detail = "Rate limit exceeded. Please try again later.",
-            status = 429,
-            traceId = context.HttpContext.TraceIdentifier
-        };
-        
-        await context.HttpContext.Response.WriteAsync(
-            System.Text.Json.JsonSerializer.Serialize(response, new System.Text.Json.JsonSerializerOptions
-            {
-                PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
-            }), token);
-    };
-});
-
-// Add CORS with security-enhanced configuration
-builder.Services.AddCors(options =>
-{
-    var securityOptions = builder.Configuration.GetSection(SecurityOptions.SectionName).Get<SecurityOptions>();
-    var corsOptions = securityOptions?.Cors ?? new CorsOptions();
-    
-    options.AddDefaultPolicy(policy =>
-    {
-        if (corsOptions.AllowedOrigins?.Length > 0)
-        {
-            policy.WithOrigins(corsOptions.AllowedOrigins);
-        }
-        else
-        {
-            // Fallback for development - still restrictive
-            policy.WithOrigins("https://localhost:3000", "https://localhost:3001");
-        }
-        
-        policy.AllowAnyMethod()
-              .AllowAnyHeader();
-              
-        if (corsOptions.AllowCredentials)
-        {
-            policy.AllowCredentials();
-        }
-        
-        policy.SetPreflightMaxAge(TimeSpan.FromSeconds(corsOptions.PreflightMaxAge));
-    });
-});
+// CORS is now handled by AddConfiguredCors extension
 
 var app = builder.Build();
 
@@ -241,17 +143,15 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-// Add rate limiting middleware
-app.UseRateLimiter();
-
-app.UseCors();
+// Use security features conditionally (high cohesion, low coupling)
+app.UseConfiguredRateLimiting(builder.Configuration);
+app.UseConfiguredCors(builder.Configuration);
 
 app.UseAuthentication();
 app.UseAuthorization();
 
-// Add custom middleware
-// High-concurrency idempotency middleware with per-operation locking
-app.UseMiddleware<IdempotencyMiddleware>();
+// Use idempotency middleware conditionally
+app.UseConfiguredIdempotency(builder.Configuration);
 
 app.MapControllers();
 

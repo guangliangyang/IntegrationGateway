@@ -50,26 +50,46 @@ public static class ServiceCollectionExtensions
         var circuitBreakerOptions = configuration.GetSection(CircuitBreakerOptions.SectionName).Get<CircuitBreakerOptions>();
         var httpClientOptions = configuration.GetSection(HttpClientOptions.SectionName).Get<HttpClientOptions>();
         
-        // Register URL validation service and SSRF protection handler
-        services.AddSingleton<IUrlValidationService, UrlValidationService>();
-        services.AddTransient<SsrfProtectionHandler>();
+        // Get SSRF protection settings to determine handler type
+        var ssrfOptions = configuration.GetSection("Security:SsrfProtection").Get<SsrfProtectionOptions>();
+        var ssrfEnabled = ssrfOptions?.Enabled == true;
 
-        // Configure ERP HTTP client with SSRF protection
-        services.AddHttpClient("ErpClient", client =>
+        // Configure ERP HTTP client with conditional SSRF protection
+        var erpClientBuilder = services.AddHttpClient("ErpClient", client =>
             ConfigureHttpClient(client, erpOptions?.BaseUrl ?? Environment.GetEnvironmentVariable("ERP_BASE_URL") ?? "http://localhost:5001", 
                               erpOptions?.TimeoutSeconds ?? httpClientOptions?.DefaultConnectionTimeoutSeconds ?? 30, 
-                              erpOptions?.ApiKey, httpClientOptions))
-            .AddHttpMessageHandler<SsrfProtectionHandler>()
+                              erpOptions?.ApiKey, httpClientOptions));
+                              
+        if (ssrfEnabled)
+        {
+            erpClientBuilder.AddHttpMessageHandler<SsrfProtectionHandler>();
+        }
+        else
+        {
+            erpClientBuilder.AddHttpMessageHandler<NoOpSsrfProtectionHandler>();
+        }
+        
+        erpClientBuilder
             .AddPolicyHandler(GetRetryPolicy(erpOptions?.MaxRetries ?? 3))
             .AddPolicyHandler(GetCircuitBreakerPolicy(circuitBreakerOptions))
             .AddPolicyHandler(GetTimeoutPolicy(erpOptions?.TimeoutSeconds ?? httpClientOptions?.DefaultRequestTimeoutSeconds ?? 30));
 
-        // Configure Warehouse HTTP client with SSRF protection
-        services.AddHttpClient("WarehouseClient", client =>
+        // Configure Warehouse HTTP client with conditional SSRF protection
+        var warehouseClientBuilder = services.AddHttpClient("WarehouseClient", client =>
             ConfigureHttpClient(client, warehouseOptions?.BaseUrl ?? Environment.GetEnvironmentVariable("WAREHOUSE_BASE_URL") ?? "http://localhost:5002",
                               warehouseOptions?.TimeoutSeconds ?? httpClientOptions?.DefaultConnectionTimeoutSeconds ?? 30, 
-                              warehouseOptions?.ApiKey, httpClientOptions))
-            .AddHttpMessageHandler<SsrfProtectionHandler>()
+                              warehouseOptions?.ApiKey, httpClientOptions));
+                              
+        if (ssrfEnabled)
+        {
+            warehouseClientBuilder.AddHttpMessageHandler<SsrfProtectionHandler>();
+        }
+        else
+        {
+            warehouseClientBuilder.AddHttpMessageHandler<NoOpSsrfProtectionHandler>();
+        }
+        
+        warehouseClientBuilder
             .AddPolicyHandler(GetRetryPolicy(warehouseOptions?.MaxRetries ?? 3))
             .AddPolicyHandler(GetCircuitBreakerPolicy(circuitBreakerOptions))
             .AddPolicyHandler(GetTimeoutPolicy(warehouseOptions?.TimeoutSeconds ?? httpClientOptions?.DefaultRequestTimeoutSeconds ?? 30));

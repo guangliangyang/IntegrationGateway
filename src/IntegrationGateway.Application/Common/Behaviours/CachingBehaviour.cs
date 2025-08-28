@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Text.Json;
 using MediatR;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace IntegrationGateway.Application.Common.Behaviours;
@@ -13,11 +14,13 @@ public class CachingBehaviour<TRequest, TResponse> : IPipelineBehavior<TRequest,
     where TRequest : notnull
 {
     private readonly IMemoryCache _cache;
+    private readonly IConfiguration _configuration;
     private readonly ILogger<CachingBehaviour<TRequest, TResponse>> _logger;
 
-    public CachingBehaviour(IMemoryCache cache, ILogger<CachingBehaviour<TRequest, TResponse>> logger)
+    public CachingBehaviour(IMemoryCache cache, IConfiguration configuration, ILogger<CachingBehaviour<TRequest, TResponse>> logger)
     {
         _cache = cache;
+        _configuration = configuration;
         _logger = logger;
     }
 
@@ -44,19 +47,45 @@ public class CachingBehaviour<TRequest, TResponse> : IPipelineBehavior<TRequest,
         // Execute the request
         var response = await next();
 
+        // Get cache duration from configuration or attribute
+        var cacheDurationSeconds = GetCacheDuration(request, cacheAttribute);
+
         // Cache the response
         var cacheEntryOptions = new MemoryCacheEntryOptions
         {
-            AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(cacheAttribute.DurationSeconds),
+            AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(cacheDurationSeconds),
             Priority = CacheItemPriority.Normal
         };
 
         _cache.Set(cacheKey, response, cacheEntryOptions);
         
         _logger.LogDebug("Cached response for key: {CacheKey}, Duration: {DurationSeconds}s", 
-            cacheKey, cacheAttribute.DurationSeconds);
+            cacheKey, cacheDurationSeconds);
 
         return response;
+    }
+
+    private int GetCacheDuration(TRequest request, CacheableAttribute cacheAttribute)
+    {
+        var requestName = typeof(TRequest).Name;
+        
+        // Try to get specific cache duration from configuration
+        var configKey = $"Cache:{requestName}ExpirationMinutes";
+        var configMinutes = _configuration.GetValue<int?>(configKey);
+        if (configMinutes.HasValue)
+        {
+            return configMinutes.Value * 60; // Convert minutes to seconds
+        }
+
+        // Fallback to default cache duration from configuration
+        var defaultMinutes = _configuration.GetValue<int?>("Cache:DefaultExpirationMinutes");
+        if (defaultMinutes.HasValue)
+        {
+            return defaultMinutes.Value * 60; // Convert minutes to seconds
+        }
+
+        // Final fallback to attribute value
+        return cacheAttribute.DurationSeconds;
     }
 
     private static string GenerateCacheKey(TRequest request, CacheableAttribute cacheAttribute)

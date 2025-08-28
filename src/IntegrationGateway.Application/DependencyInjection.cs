@@ -18,6 +18,16 @@ public static class DependencyInjection
         // Register FluentValidation validators
         services.AddValidatorsFromAssembly(Assembly.GetExecutingAssembly());
 
+        // Check if caching is enabled
+        var cacheEnabled = configuration.GetValue<bool>("Cache:Enabled", false);
+        
+        // Add cache services conditionally
+        if (cacheEnabled)
+        {
+            services.AddMemoryCache();
+            services.AddScoped<ICacheInvalidationService, CacheInvalidationService>();
+        }
+
         // Register MediatR
         services.AddMediatR(cfg =>
         {
@@ -36,18 +46,15 @@ public static class DependencyInjection
             // 4. Logging Behavior (log request/response details)
             cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(LoggingBehaviour<,>));
             
-            // 5. Caching Behavior (cache responses - closest to handler)
-            cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(CachingBehaviour<,>));
+            // 5. Caching Behavior (cache responses - closest to handler) - only if enabled
+            if (cacheEnabled)
+            {
+                cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(CachingBehaviour<,>));
+            }
         });
 
         // Configure Performance Behavior options
         services.Configure<PerformanceOptions>(configuration.GetSection("Performance"));
-
-        // Configure Caching options - using existing CacheOptions from Services
-        // services.Configure<CachingOptions>(configuration.GetSection("Caching"));
-
-        // Register cache invalidation service
-        services.AddScoped<ICacheInvalidationService, CacheInvalidationService>();
 
         return services;
     }

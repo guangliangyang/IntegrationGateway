@@ -30,6 +30,11 @@ public class CacheOptions
 {
     public const string SectionName = "Cache";
     
+    /// <summary>
+    /// Whether caching is enabled
+    /// </summary>
+    public bool Enabled { get; set; } = true;
+    
     public int DefaultExpirationMinutes { get; set; } = 5;
     
     public int ProductListExpirationMinutes { get; set; } = 2;

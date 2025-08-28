@@ -1,5 +1,7 @@
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.Options;
+using IntegrationGateway.Api.Configuration;
 using IntegrationGateway.Models.Common;
 using IntegrationGateway.Services.Interfaces;
 
@@ -13,15 +15,23 @@ public class IdempotencyMiddleware
 {
     private readonly RequestDelegate _next;
     private readonly ILogger<IdempotencyMiddleware> _logger;
+    private readonly IdempotencyOptions _options;
 
-    public IdempotencyMiddleware(RequestDelegate next, ILogger<IdempotencyMiddleware> logger)
+    public IdempotencyMiddleware(RequestDelegate next, ILogger<IdempotencyMiddleware> logger, IOptions<IdempotencyOptions> options)
     {
         _next = next;
         _logger = logger;
+        _options = options.Value;
     }
 
     public async Task InvokeAsync(HttpContext context, IIdempotencyService idempotencyService)
     {
+        // Check if idempotency is enabled - early return if disabled
+        if (!_options.Enabled)
+        {
+            await _next(context);
+            return;
+        }
         // Only process POST and PUT requests
         if (context.Request.Method != HttpMethods.Post && context.Request.Method != HttpMethods.Put)
         {
