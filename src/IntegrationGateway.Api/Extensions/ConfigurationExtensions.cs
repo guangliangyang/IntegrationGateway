@@ -13,43 +13,41 @@ public static class ConfigurationExtensions
     /// </summary>
     public static WebApplicationBuilder AddAzureKeyVault(this WebApplicationBuilder builder)
     {
-        // Only add Key Vault in non-development environments
-        if (!builder.Environment.IsDevelopment())
-        {
-            var keyVaultUri = builder.Configuration["KeyVault:VaultUri"];
-            if (!string.IsNullOrEmpty(keyVaultUri))
-            {
-                try
-                {
-                    builder.Configuration.AddAzureKeyVault(
-                        new Uri(keyVaultUri),
-                        new DefaultAzureCredential(new DefaultAzureCredentialOptions
-                        {
-                            // Exclude interactive browser credential for server environments
-                            ExcludeInteractiveBrowserCredential = true,
-                            // Use managed identity in Azure, Azure CLI for local development
-                            ExcludeSharedTokenCacheCredential = true,
-                            ExcludeVisualStudioCredential = true,
-                            ExcludeVisualStudioCodeCredential = true
-                        }));
-                    
-                    Console.WriteLine($"Successfully configured Azure Key Vault: {keyVaultUri}");
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Failed to configure Azure Key Vault: {ex.Message}");
-                    // Don't fail the application if Key Vault is not available
-                    // Fall back to other configuration sources
-                }
-            }
-            else
-            {
-                Console.WriteLine("KeyVault:VaultUri not configured, skipping Key Vault integration");
-            }
-        }
-        else
+        // 先处理开发环境，直接返回
+        if (builder.Environment.IsDevelopment())
         {
             Console.WriteLine("Development environment detected, skipping Key Vault integration");
+            return builder;
+        }
+
+        var keyVaultUri = builder.Configuration["KeyVault:VaultUri"];
+        if (string.IsNullOrEmpty(keyVaultUri))
+        {
+            Console.WriteLine("KeyVault:VaultUri not configured, skipping Key Vault integration");
+            return builder;
+        }
+
+        try
+        {
+            builder.Configuration.AddAzureKeyVault(
+                new Uri(keyVaultUri),
+                new DefaultAzureCredential(new DefaultAzureCredentialOptions
+                {
+                    // Exclude interactive browser credential for server environments
+                    ExcludeInteractiveBrowserCredential = true,
+                    // Use managed identity in Azure, Azure CLI for local development
+                    ExcludeSharedTokenCacheCredential = true,
+                    ExcludeVisualStudioCredential = true,
+                    ExcludeVisualStudioCodeCredential = true
+                }));
+
+            Console.WriteLine($"Successfully configured Azure Key Vault: {keyVaultUri}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to configure Azure Key Vault: {ex.Message}");
+            // Don't fail the application if Key Vault is not available
+            // Fall back to other configuration sources
         }
 
         return builder;
@@ -63,46 +61,45 @@ public static class ConfigurationExtensions
         var appInsightsOptions = builder.Configuration.GetSection(ApplicationInsightsOptions.SectionName)
             .Get<ApplicationInsightsOptions>();
 
-        if (appInsightsOptions != null && !string.IsNullOrEmpty(appInsightsOptions.ConnectionString))
-        {
-            // Add Application Insights telemetry
-            builder.Services.AddApplicationInsightsTelemetry(options =>
-            {
-                options.ConnectionString = appInsightsOptions.ConnectionString;
-                options.EnableAdaptiveSampling = appInsightsOptions.EnableAdaptiveSampling;
-                options.EnableQuickPulseMetricStream = appInsightsOptions.EnableQuickPulseMetricStream;
-                options.EnableHeartbeat = appInsightsOptions.EnableHeartbeat;
-                options.EnablePerformanceCounterCollectionModule = appInsightsOptions.EnablePerformanceCounterCollection;
-                options.EnableDependencyTrackingTelemetryModule = appInsightsOptions.EnableDependencyTracking;
-            });
-
-            // Configure basic telemetry
-            builder.Services.Configure<TelemetryConfiguration>(config =>
-            {
-                // Set cloud role name for distributed tracing
-                config.TelemetryInitializers.Add(new CloudRoleNameInitializer(appInsightsOptions.CloudRoleName));
-                
-                // Add custom properties
-                if (appInsightsOptions.CustomProperties.Any())
-                {
-                    config.TelemetryInitializers.Add(new CustomPropertiesInitializer(appInsightsOptions.CustomProperties));
-                }
-
-                // Configure sampling if specified
-                if (!appInsightsOptions.EnableAdaptiveSampling && appInsightsOptions.SamplingPercentage < 100.0)
-                {
-                    config.DefaultTelemetrySink.TelemetryProcessorChainBuilder
-                        .UseSampling(appInsightsOptions.SamplingPercentage)
-                        .Build();
-                }
-            });
-
-            Console.WriteLine($"Application Insights configured with connection string: {appInsightsOptions.ConnectionString[..20]}...");
-        }
-        else
+        if (appInsightsOptions == null || string.IsNullOrEmpty(appInsightsOptions.ConnectionString))
         {
             Console.WriteLine("Application Insights connection string not found, telemetry disabled");
+            return builder;
         }
+
+        // Add Application Insights telemetry
+        builder.Services.AddApplicationInsightsTelemetry(options =>
+        {
+            options.ConnectionString = appInsightsOptions.ConnectionString;
+            options.EnableAdaptiveSampling = appInsightsOptions.EnableAdaptiveSampling;
+            options.EnableQuickPulseMetricStream = appInsightsOptions.EnableQuickPulseMetricStream;
+            options.EnableHeartbeat = appInsightsOptions.EnableHeartbeat;
+            options.EnablePerformanceCounterCollectionModule = appInsightsOptions.EnablePerformanceCounterCollection;
+            options.EnableDependencyTrackingTelemetryModule = appInsightsOptions.EnableDependencyTracking;
+        });
+
+        // Configure basic telemetry
+        builder.Services.Configure<TelemetryConfiguration>(config =>
+        {
+            // Set cloud role name for distributed tracing
+            config.TelemetryInitializers.Add(new CloudRoleNameInitializer(appInsightsOptions.CloudRoleName));
+            
+            // Add custom properties
+            if (appInsightsOptions.CustomProperties.Any())
+            {
+                config.TelemetryInitializers.Add(new CustomPropertiesInitializer(appInsightsOptions.CustomProperties));
+            }
+
+            // Configure sampling if specified
+            if (!appInsightsOptions.EnableAdaptiveSampling && appInsightsOptions.SamplingPercentage < 100.0)
+            {
+                config.DefaultTelemetrySink.TelemetryProcessorChainBuilder
+                    .UseSampling(appInsightsOptions.SamplingPercentage)
+                    .Build();
+            }
+        });
+
+        Console.WriteLine($"Application Insights configured with connection string: {appInsightsOptions.ConnectionString[..20]}...");
 
         return builder;
     }
