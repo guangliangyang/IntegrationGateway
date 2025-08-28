@@ -1,5 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
-
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -7,7 +6,6 @@
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
   </PropertyGroup>
-
   <ItemGroup>
     <PackageReference Include="coverlet.collector" Version="6.0.2" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
@@ -19,15 +17,12 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0" />
     <PackageReference Include="WireMock.Net" Version="1.5.58" />
   </ItemGroup>
-
   <ItemGroup>
     <Using Include="Xunit" />
   </ItemGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\..\src\IntegrationGateway.Api\IntegrationGateway.Api.csproj" />
     <ProjectReference Include="..\..\src\IntegrationGateway.Services\IntegrationGateway.Services.csproj" />
     <ProjectReference Include="..\..\src\IntegrationGateway.Models\IntegrationGateway.Models.csproj" />
   </ItemGroup>
-
 </Project>
