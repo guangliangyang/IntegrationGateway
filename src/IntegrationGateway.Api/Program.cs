@@ -115,33 +115,7 @@ builder.Services.AddConfiguredCors(builder.Configuration);
 var app = builder.Build();
 
 // Configure the HTTP request pipeline
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger(c =>
-    {
-        c.RouteTemplate = "swagger/{documentname}/swagger.json";
-    });
-    
-    app.UseSwaggerUI(options =>
-    {
-        options.SwaggerEndpoint("/swagger/v1/swagger.json", "Integration Gateway API V1");
-        options.SwaggerEndpoint("/swagger/v2/swagger.json", "Integration Gateway API V2");
-        options.RoutePrefix = "swagger";
-        options.DocumentTitle = "Integration Gateway API Documentation";
-        options.DefaultModelsExpandDepth(-1); // Hide schemas section by default
-        options.DefaultModelExpandDepth(2);
-        options.DocExpansion(Swashbuckle.AspNetCore.SwaggerUI.DocExpansion.List);
-        options.EnableDeepLinking();
-        options.DisplayOperationId();
-        options.EnableValidator();
-        options.ShowExtensions();
-        options.EnableFilter();
-        options.MaxDisplayedTags(10);
-        
-        // Custom CSS for better appearance
-        options.InjectStylesheet("/swagger-ui/custom.css");
-    });
-}
+app.UseConfiguredSwagger();
 
 app.UseHttpsRedirection();
 
