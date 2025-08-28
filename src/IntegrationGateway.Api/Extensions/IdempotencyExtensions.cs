@@ -1,4 +1,4 @@
-using IntegrationGateway.Api.Configuration;
+using IntegrationGateway.Api.Configuration.Middleware;
 using IntegrationGateway.Api.Middleware;
 
 namespace IntegrationGateway.Api.Extensions;

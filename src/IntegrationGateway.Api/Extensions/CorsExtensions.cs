@@ -1,4 +1,4 @@
-using IntegrationGateway.Api.Configuration;
+using IntegrationGateway.Api.Configuration.Security;
 
 namespace IntegrationGateway.Api.Extensions;
 

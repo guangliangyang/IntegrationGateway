@@ -1,5 +1,7 @@
 using System.Net;
+using Microsoft.Extensions.Options;
 using IntegrationGateway.Api.Configuration;
+using IntegrationGateway.Api.Configuration.Security;
 
 namespace IntegrationGateway.Api.Services;
 
@@ -48,8 +50,7 @@ public class UrlValidationService : IUrlValidationService
         IConfiguration configuration,
         ILogger<UrlValidationService> logger)
     {
-        _options = configuration.GetSection(SecurityOptions.SectionName)
-            .GetSection(nameof(SecurityOptions.SsrfProtection))
+        _options = configuration.GetSection("Security:SsrfProtection")
             .Get<SsrfProtectionOptions>() ?? new SsrfProtectionOptions();
         _logger = logger;
     }

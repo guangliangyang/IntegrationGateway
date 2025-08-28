@@ -1,6 +1,6 @@
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
-using IntegrationGateway.Api.Configuration;
+using IntegrationGateway.Api.Configuration.Security;
 
 namespace IntegrationGateway.Api.Extensions;
 

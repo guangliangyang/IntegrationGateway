@@ -1,4 +1,4 @@
-namespace IntegrationGateway.Api.Configuration;
+namespace IntegrationGateway.Api.Configuration.Middleware;
 
 public class IdempotencyOptions
 {

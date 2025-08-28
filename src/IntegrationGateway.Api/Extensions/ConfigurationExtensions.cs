@@ -2,7 +2,9 @@ using Azure.Identity;
 using Microsoft.ApplicationInsights.Extensibility;
 using Microsoft.ApplicationInsights.DependencyCollector;
 using Microsoft.ApplicationInsights.Channel;
-using IntegrationGateway.Api.Configuration;
+using IntegrationGateway.Api.Configuration.Authentication;
+using IntegrationGateway.Api.Configuration.Middleware;
+using IntegrationGateway.Api.Configuration.Telemetry;
 
 namespace IntegrationGateway.Api.Extensions;
 

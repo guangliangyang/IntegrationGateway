@@ -1,4 +1,4 @@
-namespace IntegrationGateway.Api.Configuration;
+namespace IntegrationGateway.Api.Configuration.Authentication;
 
 public class JwtOptions
 {

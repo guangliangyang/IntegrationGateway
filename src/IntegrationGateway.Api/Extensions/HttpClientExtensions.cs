@@ -1,45 +1,13 @@
-using System.Text;
-using System.Diagnostics;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.Extensions.Options;
-using Microsoft.IdentityModel.Tokens;
 using Polly;
 using Polly.Extensions.Http;
-using IntegrationGateway.Api.Configuration;
-using IntegrationGateway.Api.Services;
+using IntegrationGateway.Api.Configuration.Integration;
+using IntegrationGateway.Api.Configuration.Security;
 using IntegrationGateway.Services.Configuration;
 
 namespace IntegrationGateway.Api.Extensions;
 
-public static class ServiceCollectionExtensions
+public static class HttpClientExtensions
 {
-    /// <summary>
-    /// Configure JWT Authentication
-    /// </summary>
-    public static IServiceCollection AddJwtAuthentication(this IServiceCollection services, IConfiguration configuration)
-    {
-        var jwtOptions = configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>();
-        if (jwtOptions != null && !string.IsNullOrEmpty(jwtOptions.SecretKey))
-        {
-            services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-                .AddJwtBearer(options =>
-                {
-                    options.TokenValidationParameters = new TokenValidationParameters
-                    {
-                        ValidateIssuer = jwtOptions.ValidateIssuer,
-                        ValidateAudience = jwtOptions.ValidateAudience,
-                        ValidateLifetime = jwtOptions.ValidateLifetime,
-                        ValidateIssuerSigningKey = jwtOptions.ValidateIssuerSigningKey,
-                        ValidIssuer = jwtOptions.Issuer,
-                        ValidAudience = jwtOptions.Audience,
-                        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.SecretKey))
-                    };
-                });
-        }
-
-        return services;
-    }
-
     /// <summary>
     /// Configure HTTP clients with resilience policies and SSRF protection
     /// </summary>
@@ -95,44 +63,6 @@ public static class ServiceCollectionExtensions
             .AddPolicyHandler(GetTimeoutPolicy(warehouseOptions?.TimeoutSeconds ?? httpClientOptions?.DefaultRequestTimeoutSeconds ?? 30));
 
         return services;
-    }
-    
-    /// <summary>
-    /// HTTP message handler for SSRF protection
-    /// </summary>
-    public class SsrfProtectionHandler : DelegatingHandler
-    {
-        private readonly IUrlValidationService _urlValidationService;
-        private readonly ILogger<SsrfProtectionHandler> _logger;
-
-        public SsrfProtectionHandler(
-            IUrlValidationService urlValidationService,
-            ILogger<SsrfProtectionHandler> logger)
-        {
-            _urlValidationService = urlValidationService;
-            _logger = logger;
-        }
-
-        protected override async Task<HttpResponseMessage> SendAsync(
-            HttpRequestMessage request,
-            CancellationToken cancellationToken)
-        {
-            if (request.RequestUri == null)
-            {
-                _logger.LogError("HTTP request has no URI");
-                throw new InvalidOperationException("Request URI cannot be null");
-            }
-
-            // Validate URL before making the request
-            var isUrlSafe = await _urlValidationService.IsUrlSafeAsync(request.RequestUri);
-            if (!isUrlSafe)
-            {
-                _logger.LogWarning("Blocked potentially unsafe URL: {Url}", request.RequestUri);
-                throw new HttpRequestException($"Request to '{request.RequestUri}' was blocked by SSRF protection");
-            }
-
-            return await base.SendAsync(request, cancellationToken);
-        }
     }
 
     /// <summary>
@@ -204,3 +134,4 @@ public static class ServiceCollectionExtensions
         return Policy.TimeoutAsync<HttpResponseMessage>(timeoutSeconds);
     }
 }
+

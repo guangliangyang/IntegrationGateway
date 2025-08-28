@@ -1,4 +1,4 @@
-namespace IntegrationGateway.Api.Configuration;
+namespace IntegrationGateway.Api.Configuration.Integration;
 
 public class HttpClientOptions
 {

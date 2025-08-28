@@ -1,7 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
-using IntegrationGateway.Api.Configuration;
+using IntegrationGateway.Api.Configuration.Middleware;
 using IntegrationGateway.Models.Common;
 using IntegrationGateway.Services.Interfaces;
 
