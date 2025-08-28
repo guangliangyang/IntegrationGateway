@@ -13,7 +13,6 @@ using IntegrationGateway.Services.Interfaces;
 using IntegrationGateway.Application;
 using DotNetEnv;
 
-[assembly: InternalsVisibleTo("IntegrationGateway.Tests")]
 
 // Load environment variables from .env file
 Env.Load();
@@ -178,4 +177,5 @@ app.MapGet("/", () => new
 
 app.Run();
 
+// Make Program class accessible for testing
 public partial class Program { }

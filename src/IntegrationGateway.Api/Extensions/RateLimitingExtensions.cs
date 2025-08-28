@@ -21,11 +21,7 @@ public static class RateLimitingExtensions
         // Early return if rate limiting is disabled
         if (rateLimitConfig?.Enabled != true)
         {
-            // Still add rate limiter but with no-op configuration
-            services.AddRateLimiter(options =>
-            {
-                options.GlobalLimiter = PartitionedRateLimiter.CreateChained<HttpContext>();
-            });
+            // Return without adding rate limiter when disabled
             return services;
         }
 
@@ -102,8 +98,11 @@ public static class RateLimitingExtensions
     {
         var rateLimitConfig = configuration.GetSection("Security:RateLimiting").Get<RateLimitingOptions>();
         
-        // Always use rate limiter (it handles enabled/disabled internally)
-        app.UseRateLimiter();
+        // Only use rate limiter if it's enabled (services were registered)
+        if (rateLimitConfig?.Enabled == true)
+        {
+            app.UseRateLimiter();
+        }
 
         return app;
     }
