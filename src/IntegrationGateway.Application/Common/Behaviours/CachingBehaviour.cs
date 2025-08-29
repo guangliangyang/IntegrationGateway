@@ -9,6 +9,17 @@ namespace IntegrationGateway.Application.Common.Behaviours;
 
 /// <summary>
 /// MediatR pipeline behavior for automatic caching of query results
+/// 
+/// DEMO IMPLEMENTATION NOTES:
+/// - Uses in-memory cache (IMemoryCache) with TTL-based expiration only
+/// - Cache invalidation logic removed due to in-memory cache limitations
+/// - Default 5-second TTL balances performance and data freshness
+/// 
+/// PRODUCTION CONSIDERATIONS:
+/// - Replace with Redis distributed cache for scalability
+/// - Implement event-driven cache invalidation for immediate consistency
+/// - Add cache metrics and monitoring capabilities
+/// - Consider cache partitioning strategies
 /// </summary>
 public class CachingBehaviour<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
     where TRequest : notnull
@@ -127,47 +138,11 @@ public class CacheableAttribute : Attribute
     public string? CustomKeyPattern { get; set; }
 }
 
-/// <summary>
-/// Interface for requests that can invalidate cache entries
-/// </summary>
-public interface ICacheInvalidating
-{
-    /// <summary>
-    /// Get cache keys that should be invalidated after this operation
-    /// </summary>
-    IEnumerable<string> GetCacheKeysToInvalidate();
-}
-
-/// <summary>
-/// Cache invalidation behavior for commands that modify data
-/// </summary>
-public class CacheInvalidationBehaviour<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
-    where TRequest : notnull
-{
-    private readonly IMemoryCache _cache;
-    private readonly ILogger<CacheInvalidationBehaviour<TRequest, TResponse>> _logger;
-
-    public CacheInvalidationBehaviour(IMemoryCache cache, ILogger<CacheInvalidationBehaviour<TRequest, TResponse>> logger)
-    {
-        _cache = cache;
-        _logger = logger;
-    }
-
-    public async Task<TResponse> Handle(TRequest request, RequestHandlerDelegate<TResponse> next, CancellationToken cancellationToken)
-    {
-        var response = await next();
-
-        if (request is ICacheInvalidating cacheInvalidating)
-        {
-            var keysToInvalidate = cacheInvalidating.GetCacheKeysToInvalidate();
-            
-            foreach (var key in keysToInvalidate)
-            {
-                _cache.Remove(key);
-                _logger.LogDebug("Invalidated cache key: {CacheKey}", key);
-            }
-        }
-
-        return response;
-    }
-}
+// NOTE: Cache invalidation interfaces and behaviors removed
+// REASON: In-memory cache limitations with pattern matching and distributed environment issues
+// SOLUTION: Using TTL-based expiration (5 seconds) for demo purposes
+// 
+// For production environments, consider:
+// - Redis with SCAN + DEL for pattern-based invalidation
+// - Event-driven cache invalidation using domain events
+// - Distributed cache invalidation strategies

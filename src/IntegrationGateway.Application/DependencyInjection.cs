@@ -25,7 +25,8 @@ public static class DependencyInjection
         if (cacheEnabled)
         {
             services.AddMemoryCache();
-            services.AddScoped<ICacheInvalidationService, CacheInvalidationService>();
+            // NOTE: Cache invalidation removed - using TTL-based expiration only
+            // This is a demo implementation. Production should use Redis with proper invalidation.
         }
 
         // Register MediatR

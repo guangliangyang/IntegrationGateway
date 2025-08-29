@@ -11,7 +11,7 @@ namespace IntegrationGateway.Application.Products.Commands;
 /// <summary>
 /// Command to create a new product
 /// </summary>
-public record CreateProductCommand : IRequest<ProductDto>, ICacheInvalidating
+public record CreateProductCommand : IRequest<ProductDto>
 {
     public required string Name { get; init; }
     public string? Description { get; init; }
@@ -19,12 +19,8 @@ public record CreateProductCommand : IRequest<ProductDto>, ICacheInvalidating
     public required string Category { get; init; }
     public bool IsActive { get; init; } = true;
 
-    public IEnumerable<string> GetCacheKeysToInvalidate()
-    {
-        // Invalidate all product list caches
-        yield return "GetProductsQuery*";
-        yield return "GetProductsV2Query*";
-    }
+    // NOTE: Cache invalidation removed - relying on 5-second TTL for data freshness
+    // This is a demo implementation. Production should use event-driven cache invalidation.
 }
 
 /// <summary>

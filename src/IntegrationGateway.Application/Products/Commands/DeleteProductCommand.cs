@@ -10,18 +10,12 @@ namespace IntegrationGateway.Application.Products.Commands;
 /// <summary>
 /// Command to delete a product (soft delete)
 /// </summary>
-public record DeleteProductCommand : IRequest<bool>, ICacheInvalidating
+public record DeleteProductCommand : IRequest<bool>
 {
     public required string Id { get; init; }
 
-    public IEnumerable<string> GetCacheKeysToInvalidate()
-    {
-        // Invalidate specific product cache and all product list caches
-        yield return $"GetProductQuery_{Id}";
-        yield return $"GetProductV2Query_{Id}";
-        yield return "GetProductsQuery*";
-        yield return "GetProductsV2Query*";
-    }
+    // NOTE: Cache invalidation removed - relying on 5-second TTL for data freshness
+    // This is a demo implementation. Production should use event-driven cache invalidation.
 }
 
 /// <summary>
