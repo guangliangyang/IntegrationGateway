@@ -10,7 +10,7 @@ namespace IntegrationGateway.Application.Products.Queries;
 /// <summary>
 /// Query to get a single product by ID
 /// </summary>
-[Cacheable(600)] // Cache for 10 minutes
+[Cacheable(5)] // Cache for 5 seconds
 public record GetProductQuery(string Id) : IRequest<ProductDto?>;
 
 /// <summary>

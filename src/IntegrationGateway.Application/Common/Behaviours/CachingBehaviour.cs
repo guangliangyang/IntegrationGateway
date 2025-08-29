@@ -81,18 +81,18 @@ public class CachingBehaviour<TRequest, TResponse> : IPipelineBehavior<TRequest,
         var requestName = typeof(TRequest).Name;
         
         // Try to get specific cache duration from configuration
-        var configKey = $"Cache:{requestName}ExpirationMinutes";
-        var configMinutes = _configuration.GetValue<int?>(configKey);
-        if (configMinutes.HasValue)
+        var configKey = $"Cache:{requestName}ExpirationSeconds";
+        var configSeconds = _configuration.GetValue<int?>(configKey);
+        if (configSeconds.HasValue)
         {
-            return configMinutes.Value * 60; // Convert minutes to seconds
+            return configSeconds.Value;
         }
 
         // Fallback to default cache duration from configuration
-        var defaultMinutes = _configuration.GetValue<int?>("Cache:DefaultExpirationMinutes");
-        if (defaultMinutes.HasValue)
+        var defaultSeconds = _configuration.GetValue<int?>("Cache:DefaultExpirationSeconds");
+        if (defaultSeconds.HasValue)
         {
-            return defaultMinutes.Value * 60; // Convert minutes to seconds
+            return defaultSeconds.Value;
         }
 
         // Final fallback to attribute value

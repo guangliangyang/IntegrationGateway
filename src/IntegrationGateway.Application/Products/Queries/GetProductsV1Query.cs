@@ -9,7 +9,7 @@ namespace IntegrationGateway.Application.Products.Queries;
 /// <summary>
 /// Query to get paginated list of products
 /// </summary>
-[Cacheable(300)] // Cache for 5 minutes
+[Cacheable(5)] // Cache for 5 seconds
 public record GetProductsV1Query(int Page = 1, int PageSize = 50) : IRequest<ProductListResponse>;
 
 /// <summary>

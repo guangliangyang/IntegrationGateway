@@ -9,7 +9,7 @@ namespace IntegrationGateway.Application.Products.Queries;
 /// <summary>
 /// Query to get paginated list of products with V2 enhanced information
 /// </summary>
-[Cacheable(300)] // Cache for 5 minutes
+[Cacheable(5)] // Cache for 5 seconds
 public record GetProductsV2Query(int Page = 1, int PageSize = 50) : IRequest<ProductListV2Response>;
 
 /// <summary>
@@ -41,7 +41,7 @@ public class GetProductsV2QueryHandler : IRequestHandler<GetProductsV2Query, Pro
 /// <summary>
 /// Query to get a single product by ID with V2 enhanced information
 /// </summary>
-[Cacheable(600)] // Cache for 10 minutes
+[Cacheable(5)] // Cache for 5 seconds
 public record GetProductV2Query(string Id) : IRequest<ProductV2Dto?>;
 
 /// <summary>
