@@ -14,7 +14,7 @@
 
 **Clone and Run**: 
 ```bash
-git clone <repository-url>
+git clone https://github.com/guangliangyang/IntegrationGateway.git
 cd IntegrationGateway
 dotnet run --project src/IntegrationGateway.Api
 ```
@@ -23,10 +23,12 @@ dotnet run --project src/IntegrationGateway.Api
 
 ## Architecture Highlights
 
-- **API Versioning**: V1/V2 with inheritance pattern for backward compatibility
-- **Resilience Patterns**: Retry, circuit breaker, timeout with Polly
-- **Idempotency**: Write operations with composite key strategy
-- **Clean Architecture**: CQRS/MediatR with pipeline behaviors
+- **API Versioning**: V1/V2 with inheritance pattern for zero-breaking-change evolution
+- **Resilience Patterns**: 2 retries, 15s timeout, 5-failure circuit breaker with Polly
+- **Idempotency**: 15-minute TTL with 3s fast-fail semantics for exactly-once operations
+- **Clean Architecture**: CQRS/MediatR with pipeline behaviors for cross-cutting concerns
+- **Caching Strategy**: 5-second TTL in-memory caching with type-safe configuration
+- **Security**: Azure Key Vault integration with comprehensive SSRF protection
 
 ## Project Structure
 
@@ -46,11 +48,12 @@ IntegrationGateway/
 
 ### Core Framework
 
-- **.NET 8.0** + **ASP.NET Core** - Modern web framework
-- **MediatR** - CQRS pattern implementation
-- **Polly** - Resilience patterns (retry, circuit breaker)
-- **xUnit + Moq** - Testing framework
-- **Application Insights** - Observability and monitoring
+- **.NET 8.0** + **ASP.NET Core** - High-concurrency async/await foundation
+- **MediatR** - CQRS pattern with pipeline behaviors for cross-cutting concerns
+- **Polly** - Production-ready resilience patterns (retry, circuit breaker, timeout)
+- **Azure Key Vault** - Enterprise-grade secret management with DefaultAzureCredential
+- **Application Insights** - Comprehensive observability with dependency tracking
+- **xUnit + Moq** - Complete testing ecosystem with integration test support
 
 ### Why C# over Go/Node.js/Python?
 
@@ -75,7 +78,10 @@ IntegrationGateway/
 - [Quick Start Guide](docs/Quick-Start-Guide.md)
 - [Testing Guide](docs/Testing-Guide.md)
 - [API Multi-Versioning Technical Implementation](docs/API-Multi-Versioning-Technical-Implementation.md)
+- [Cross-Cutting Concerns Strategy](docs/Cross-Cutting-Concerns-Strategy.md)
+- [Framework & Technology Rationale](docs/Framework-Technology-Rationale.md)
 - [Design Answers](answers/DESIGN.md)
+- [Code Review Results](answers/CodeReview.md)
 
 ## Development Workflow
 
@@ -114,10 +120,12 @@ When scaling to enterprise production environments, consider these Azure service
 
 ## Performance Characteristics
 
-- **Throughput**: 10,000+ requests/second (local testing)
-- **Latency**: Sub-100ms P95 for cached responses
-- **Concurrency**: Thread-safe operations with high-concurrency patterns
-- **Memory**: Efficient memory usage with automatic garbage collection
+- **Request Timeout**: 15 seconds with 2 retry attempts
+- **Circuit Breaker**: Opens after 5 failures, 2-minute recovery window
+- **Caching**: 5-second TTL for reduced upstream load
+- **Idempotency**: 50 concurrent operations with 3-second fast-fail timeout
+- **Concurrency**: Thread-safe operations with SemaphoreSlim coordination
+- **Memory**: Efficient resource management with automatic cleanup
 
 ## Security Features
 
@@ -130,11 +138,12 @@ When scaling to enterprise production environments, consider these Azure service
 
 ## Monitoring & Observability
 
-- **Structured Logging**: JSON format with correlation IDs
-- **Custom Metrics**: Performance counters and business metrics
-- **Health Checks**: Endpoint and dependency health monitoring
-- **Distributed Tracing**: Request correlation across services
-- **Application Insights**: Full telemetry and analytics integration
+- **Structured Logging**: JSON format with correlation IDs across MediatR pipeline
+- **Business Metrics**: Cache hit ratios, circuit breaker states, operation durations
+- **Health Checks**: Upstream service connectivity and system health monitoring
+- **Distributed Tracing**: End-to-end request correlation with Application Insights
+- **Pipeline Behaviors**: Request/response logging with performance benchmarks
+- **Custom Telemetry**: Integration-specific metrics for troubleshooting
 
 ## Contributing
 
@@ -144,6 +153,12 @@ When scaling to enterprise production environments, consider these Azure service
 4. Commit your changes (`git commit -m 'Add amazing feature'`)
 5. Push to the branch (`git push origin feature/amazing-feature`)
 6. Open a Pull Request
+
+## Acknowledgments
+
+- **Clean Architecture Pattern**: Inspired by [Jason Taylor's Clean Architecture Template](https://github.com/jasontaylordev/CleanArchitecture) - excellent foundation for .NET enterprise applications
+- **Development Assistance**: Built with [Claude AI](https://claude.ai) assistance for code generation, architecture decisions, and best practices implementation
+- **Open Source Libraries**: Grateful to the maintainers of MediatR, Polly, FluentValidation, and the entire .NET ecosystem
 
 ## License
 
