@@ -2,19 +2,20 @@
 
 ## 1. Backward-Compatible Contract Evolution for APIs
 
-My approach uses **inheritance-based controller versioning** combined with **extended DTO patterns** to ensure zero breaking changes. V2 controllers inherit from V1, automatically preserving all V1 functionality while adding enhancements. Response DTOs follow extension inheritance (ProductV2Dto extends ProductDto), ensuring all V1 fields remain present with identical structure. I implement **URL path versioning** (`/api/v1/` vs `/api/v2/`) with **ASP.NET Core API versioning**, supporting multiple access methods (URL, query params, headers). **Separate MediatR handlers** (GetProductsV1Query vs GetProductsV2Query) allow version-specific optimizations while maintaining clear separation. This pattern scales infinitely (V1’V2’V3’V4) with each version building upon the previous, never removing or changing existing contracts.
+My approach uses **inheritance-based controller versioning** combined with **extended DTO patterns** to ensure zero breaking changes. V2 controllers inherit from V1, automatically preserving all V1 functionality while adding enhancements. Response DTOs follow extension inheritance (ProductV2Dto extends ProductDto), ensuring all V1 fields remain present with identical structure. I implement **URL path versioning** (`/api/v1/` vs `/api/v2/`) with **ASP.NET Core API versioning**, supporting multiple access methods (URL, query params, headers). **Separate MediatR handlers** (GetProductsV1Query vs GetProductsV2Query) allow version-specific optimizations while maintaining clear separation. This pattern scales infinitely (V1ï¿½V2ï¿½V3ï¿½V4) with each version building upon the previous, never removing or changing existing contracts.
 
 ## 2. Retries, Timeouts, and Circuit Breakers
 
-I use **Polly resilience patterns** with carefully tuned defaults based on enterprise integration requirements. **Retry policy**: 3 attempts with exponential backoff plus jitter (1s’2s’4s) to avoid thundering herd. **Timeouts**: 30-second request timeout, 30-second connection timeout to balance responsiveness with network variance. **Circuit breaker**: Opens after 5 consecutive failures with 1-minute break duration, requiring 10 minimum requests in 10-second sampling window before evaluation. **Budget setting**: Total request budget of ~2 minutes (30s base + 3 retries with backoff), allowing for network issues while preventing cascading failures. Circuit breaker prevents request amplification during downstream outages, providing **graceful degradation** with cached responses or default values when services are unavailable.
+I use **Polly resilience patterns** with carefully tuned defaults based on enterprise integration requirements. **Retry policy**: 2 attempts with exponential backoff plus jitter (1s,2s,4s) to avoid thundering herd. **Timeouts**: 15-second request timeout, 10-second connection timeout to balance responsiveness with network variance. **Circuit breaker**: Opens after 5 consecutive failures with 2-minute break duration, requiring 10 minimum requests in 30-second sampling window before evaluation. **Budget setting**: Total request budget of ~45 seconds (15s base + 2 retries with backoff), allowing for network issues while preventing cascading failures. Circuit breaker prevents request amplification during downstream outages, providing **graceful degradation** with cached responses or default values when services are unavailable.  
 
 ## 3. Idempotency Strategies for Writes
 
-I implement **composite key idempotency** using `Idempotency-Key + HTTP method + body hash` to ensure uniqueness across different operations. **Storage mechanism**: Thread-safe ConcurrentDictionary with semaphore-based locking for high-concurrency scenarios, preventing race conditions during simultaneous identical requests. **TTL management**: 24-hour expiration with background cleanup to balance replay protection with memory efficiency. **Replay handling**: First request executes normally and stores result; subsequent identical requests within TTL window return cached response immediately without re-execution. **Concurrency safety**: SemaphoreSlim ensures only one thread processes each unique operation while others wait, guaranteeing exactly-once execution semantics. The implementation handles **edge cases** like partial failures, timeout scenarios, and concurrent access patterns through comprehensive locking and state management.
+I implement **composite key idempotency** using `Idempotency-Key + HTTP method + body hash` to ensure uniqueness across different operations. **Storage mechanism**: Thread-safe ConcurrentDictionary with semaphore-based locking for high-concurrency scenarios, preventing race conditions during simultaneous identical requests. **TTL management**: 15-minute expiration with 5-minute cleanup intervals to balance replay protection with memory efficiency. **Replay handling**: First request executes normally and stores result; subsequent identical requests within TTL window return cached response immediately without re-execution. **Concurrency safety**: SemaphoreSlim with 3-second timeout ensures only one thread processes each unique operation while others wait, guaranteeing exactly-once execution semantics. The implementation handles **edge cases** like partial failures, timeout scenarios, and concurrent access patterns through comprehensive locking and state management.
 
 ## 4. Observability for Integration Debugging
 
 My observability strategy focuses on **correlation tracking** and **performance metrics** for integration troubleshooting. **Structured logging**: JSON format with correlation IDs across all services, request/response payloads (sanitized), timing breakdowns per upstream call, and error context with stack traces. **Custom metrics**: Request duration histograms, upstream service success/failure rates, cache hit ratios, circuit breaker state changes, and concurrent operation counts. **Application Insights integration** with custom telemetry for **dependency tracking**, automatic correlation across service boundaries, and performance counter collection. **MediatR pipeline behaviors** capture request processing stages, validation failures, cache operations, and performance benchmarks. **Health checks** monitor upstream connectivity, cache status, and circuit breaker states, enabling proactive issue detection before user impact.
+
 
 ## 5. Security Controls Implementation
 
@@ -22,8 +23,21 @@ I implement **defense-in-depth security** across multiple layers. **Authenticati
 
 ## 6. Framework/Tooling Choice and Rationale
 
-I chose **.NET 8.0 with ASP.NET Core** for this integration gateway use case due to its **enterprise integration strengths**. **Performance**: Excellent async/await support for high-concurrency scenarios, native JSON performance with System.Text.Json, and efficient memory management for long-running services. **Resilience ecosystem**: Polly library provides mature retry, circuit breaker, and timeout patterns specifically designed for integration scenarios. **Enterprise features**: Built-in dependency injection, configuration management, health checks, and Application Insights telemetry integration. **API development**: First-class OpenAPI/Swagger support, built-in API versioning, and comprehensive validation frameworks. **Testing ecosystem**: Excellent unit/integration testing support with WebApplicationFactory, WireMock for external service mocking, and comprehensive coverage tooling. **Operational benefits**: Mature containerization support, Azure-native deployment options, and extensive monitoring/observability tooling that enterprises require for production integration platforms.
+I chose .NET 8.0 with ASP.NET Core as the foundation due to its excellent async/await support for high-concurrency integration scenarios and mature enterprise ecosystem. 
+### 1. MediatR with CQRS pattern 
+provides clean separation between queries and commands while enabling powerful pipeline behaviors for cross-cutting concerns like caching, validation, and logging. 
+### 2. Polly library 
+delivers production-ready resilience patterns (retry, circuit breaker, timeout) specifically designed for upstream service integration with exponential backoff and jitter to prevent thundering herd effects. 
+### 3. Azure Key Vault 
+with DefaultAzureCredential ensures enterprise-grade secret management while maintaining seamless development-to-production workflows without hardcoded credentials. 
+### 4. Application Insights 
+provides comprehensive observability with automatic dependency tracking, structured logging, and correlation IDs across the entire request pipeline for effective troubleshooting. 
+### 5. ASP.NET Core API Versioning 
+combined with controller inheritance patterns enables zero-breaking-change evolution, allowing V2 to automatically inherit all V1 functionality while adding enhancements. 
+### 6. Custom idempotency implementation 
+using SemaphoreSlim and ConcurrentDictionary provides thread-safe exactly-once semantics with fast-fail timeouts, essential for preventing duplicate processing in integration scenarios. 
 
+ 
 ---
 
 *These answers reflect the implemented solution in the Integration Gateway codebase, demonstrating production-ready patterns for enterprise API integration scenarios.*
