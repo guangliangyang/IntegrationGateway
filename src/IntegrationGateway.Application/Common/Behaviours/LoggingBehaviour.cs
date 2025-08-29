@@ -44,11 +44,10 @@ public class LoggingBehaviour<TRequest, TResponse> : IPipelineBehavior<TRequest,
 
             return response;
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            // Log failure (exception details will be logged by UnhandledExceptionBehaviour)
-            _logger.LogError("Request failed: {RequestName} ({RequestId}) - {ExceptionType}: {ExceptionMessage}", 
-                requestName, requestGuid, ex.GetType().Name, ex.Message);
+            // Note: Exception details will be logged by UnhandledExceptionBehaviour
+            // No logging here to avoid duplication
             throw;
         }
     }

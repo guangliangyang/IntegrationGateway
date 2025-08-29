@@ -36,55 +36,5 @@ public class UnhandledExceptionBehaviour<TRequest, TResponse> : IPipelineBehavio
     }
 }
 
-/// <summary>
-/// Application-specific exceptions for different scenarios
-/// </summary>
-public abstract class ApplicationException : Exception
-{
-    protected ApplicationException(string message) : base(message) { }
-    protected ApplicationException(string message, Exception innerException) : base(message, innerException) { }
-}
-
-/// <summary>
-/// Exception thrown when a requested resource is not found
-/// </summary>
-public class NotFoundException : ApplicationException
-{
-    public NotFoundException(string name, object key)
-        : base($"Entity \"{name}\" ({key}) was not found.")
-    {
-    }
-
-    public NotFoundException(string message) : base(message) { }
-}
-
-/// <summary>
-/// Exception thrown when a business rule validation fails
-/// </summary>
-public class BusinessRuleViolationException : ApplicationException
-{
-    public BusinessRuleViolationException(string message) : base(message) { }
-
-    public BusinessRuleViolationException(string message, Exception innerException) 
-        : base(message, innerException) { }
-}
-
-/// <summary>
-/// Exception thrown when an external service is unavailable or fails
-/// </summary>
-public class ExternalServiceException : ApplicationException
-{
-    public string ServiceName { get; }
-
-    public ExternalServiceException(string serviceName, string message) 
-        : base($"External service '{serviceName}' error: {message}")
-    {
-        ServiceName = serviceName;
-    }
-
-    public ExternalServiceException(string serviceName, string message, Exception innerException)
-        : base($"External service '{serviceName}' error: {message}", innerException)
-    {
-        ServiceName = serviceName;
-    }
-}
+// Note: Custom exception types removed as they were not being used anywhere in the codebase.
+// If needed in the future, specific exceptions should be defined when actually implemented.
