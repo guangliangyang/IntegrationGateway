@@ -145,9 +145,14 @@ public class ProductService : IProductService
         };
 
         var erpResponse = await _erpService.CreateProductAsync(createRequest, cancellationToken);
-        if (!erpResponse.Success || erpResponse.Data == null)
+        if (!erpResponse.Success)
         {
-            throw new InvalidOperationException($"Failed to create product: {erpResponse.ErrorMessage}");
+            throw new InvalidOperationException($"ERP service error: {erpResponse.ErrorMessage}");
+        }
+        
+        if (erpResponse.Data == null)
+        {
+            throw new InvalidOperationException("ERP returned success but null product data");
         }
 
         var createdProduct = erpResponse.Data;
@@ -175,9 +180,14 @@ public class ProductService : IProductService
         };
 
         var erpResponse = await _erpService.UpdateProductAsync(productId, updateRequest, cancellationToken);
-        if (!erpResponse.Success || erpResponse.Data == null)
+        if (!erpResponse.Success)
         {
-            throw new InvalidOperationException($"Failed to update product: {erpResponse.ErrorMessage}");
+            throw new InvalidOperationException($"ERP service error: {erpResponse.ErrorMessage}");
+        }
+        
+        if (erpResponse.Data == null)
+        {
+            throw new InvalidOperationException("ERP returned success but null product data");
         }
 
         var updatedProduct = erpResponse.Data;
@@ -197,8 +207,14 @@ public class ProductService : IProductService
         var erpResponse = await _erpService.DeleteProductAsync(productId, cancellationToken);
         if (!erpResponse.Success)
         {
-            _logger.LogError("Failed to delete product {ProductId}: {ErrorMessage}", productId, erpResponse.ErrorMessage);
-            return false;
+            if (erpResponse.ErrorMessage?.Contains("not found", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                _logger.LogDebug("Product {ProductId} not found for deletion", productId);
+                return false;
+            }
+            
+            _logger.LogError("ERP service error for delete {ProductId}: {ErrorMessage}", productId, erpResponse.ErrorMessage);
+            throw new InvalidOperationException($"ERP service error: {erpResponse.ErrorMessage}");
         }
 
         _logger.LogDebug("Deleted product {ProductId} from ERP", productId);
@@ -255,10 +271,16 @@ public class ProductService : IProductService
     private async Task<List<ErpProduct>> GetErpProductsAsync(CancellationToken cancellationToken)
     {
         var erpResponse = await _erpService.GetProductsAsync(cancellationToken);
-        if (!erpResponse.Success || erpResponse.Data == null)
+        if (!erpResponse.Success)
         {
-            _logger.LogError("Failed to get products from ERP: {ErrorMessage}", erpResponse.ErrorMessage);
-            throw new InvalidOperationException($"ERP service unavailable: {erpResponse.ErrorMessage}");
+            _logger.LogError("ERP service error: {ErrorMessage}", erpResponse.ErrorMessage);
+            throw new InvalidOperationException($"ERP service error: {erpResponse.ErrorMessage}");
+        }
+        
+        if (erpResponse.Data == null)
+        {
+            _logger.LogDebug("ERP returned success but null data for products list");
+            return new List<ErpProduct>();
         }
 
         _logger.LogDebug("Retrieved {Count} products from ERP", erpResponse.Data.Count);
@@ -268,9 +290,15 @@ public class ProductService : IProductService
     private async Task<ErpProduct?> GetErpProductByIdAsync(string productId, CancellationToken cancellationToken)
     {
         var erpResponse = await _erpService.GetProductAsync(productId, cancellationToken);
-        if (!erpResponse.Success || erpResponse.Data == null)
+        if (!erpResponse.Success)
         {
-            _logger.LogWarning("Product {ProductId} not found in ERP: {ErrorMessage}", productId, erpResponse.ErrorMessage);
+            _logger.LogError("ERP service error for product {ProductId}: {ErrorMessage}", productId, erpResponse.ErrorMessage);
+            throw new InvalidOperationException($"ERP service error: {erpResponse.ErrorMessage}");
+        }
+        
+        if (erpResponse.Data == null)
+        {
+            _logger.LogDebug("Product {ProductId} not found in ERP", productId);
             return null;
         }
 
@@ -283,29 +311,40 @@ public class ProductService : IProductService
         var productIdList = productIds.ToList();
         var warehouseResponse = await _warehouseService.GetBulkStockAsync(productIdList, cancellationToken);
         
-        if (warehouseResponse.Success && warehouseResponse.Data != null)
+        if (!warehouseResponse.Success)
         {
-            var stockLookup = warehouseResponse.Data.Stocks.ToDictionary(s => s.ProductId, s => s);
-            _logger.LogDebug("Retrieved stock for {Count} products from Warehouse", stockLookup.Count);
-            return stockLookup;
+            _logger.LogError("Warehouse service error: {ErrorMessage}", warehouseResponse.ErrorMessage);
+            throw new InvalidOperationException($"Warehouse service error: {warehouseResponse.ErrorMessage}");
         }
         
-        _logger.LogWarning("Failed to get stock from Warehouse: {ErrorMessage}. Continuing without stock data.", warehouseResponse.ErrorMessage);
-        return new Dictionary<string, WarehouseStock>();
+        if (warehouseResponse.Data?.Stocks == null)
+        {
+            _logger.LogDebug("Warehouse returned success but null stock data");
+            return new Dictionary<string, WarehouseStock>();
+        }
+        
+        var stockLookup = warehouseResponse.Data.Stocks.ToDictionary(s => s.ProductId, s => s);
+        _logger.LogDebug("Retrieved stock for {Count} products from Warehouse", stockLookup.Count);
+        return stockLookup;
     }
 
     private async Task<WarehouseStock?> GetWarehouseStockAsync(string productId, CancellationToken cancellationToken)
     {
         var warehouseResponse = await _warehouseService.GetStockAsync(productId, cancellationToken);
         
-        if (warehouseResponse.Success && warehouseResponse.Data != null)
+        if (!warehouseResponse.Success)
         {
-            _logger.LogDebug("Retrieved stock for product {ProductId} from Warehouse", productId);
-            return warehouseResponse.Data;
+            _logger.LogError("Warehouse service error for product {ProductId}: {ErrorMessage}", productId, warehouseResponse.ErrorMessage);
+            throw new InvalidOperationException($"Warehouse service error: {warehouseResponse.ErrorMessage}");
+        }
+        
+        if (warehouseResponse.Data == null)
+        {
+            _logger.LogDebug("Stock not found for product {ProductId}", productId);
+            return null;
         }
 
-        _logger.LogWarning("Failed to get stock for product {ProductId}: {ErrorMessage}. Continuing without stock data.", 
-            productId, warehouseResponse.ErrorMessage);
-        return null;
+        _logger.LogDebug("Retrieved stock for product {ProductId} from Warehouse", productId);
+        return warehouseResponse.Data;
     }
 }
