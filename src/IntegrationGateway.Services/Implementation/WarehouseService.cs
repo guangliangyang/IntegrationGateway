@@ -1,3 +1,5 @@
+using System.Net;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using IntegrationGateway.Models.External;
@@ -9,6 +11,11 @@ public class WarehouseService : IWarehouseService
 {
     private readonly HttpClient _httpClient;
     private readonly ILogger<WarehouseService> _logger;
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true
+    };
 
     public WarehouseService(IHttpClientFactory httpClientFactory, ILogger<WarehouseService> logger)
     {
@@ -19,144 +26,185 @@ public class WarehouseService : IWarehouseService
 
     public async Task<WarehouseResponse<WarehouseStock>> GetStockAsync(string productId, CancellationToken cancellationToken = default)
     {
-        try
-        {
-            _logger.LogDebug("Getting stock from Warehouse: {ProductId}", productId);
+        if (string.IsNullOrWhiteSpace(productId))
+            throw new ArgumentException("Product ID cannot be null or empty", nameof(productId));
             
-            var response = await _httpClient.GetAsync($"/api/stock/{productId}", cancellationToken);
-
-            if (response.IsSuccessStatusCode)
+        return await ExecuteWithFallbackAsync<WarehouseStock>(
+            async () =>
+            {
+                _logger.LogDebug("Getting stock from Warehouse: {ProductId}", productId);
+                return await _httpClient.GetAsync($"/api/stock/{productId}", cancellationToken);
+            },
+            async response =>
             {
                 var json = await response.Content.ReadAsStringAsync(cancellationToken);
-                var stock = JsonSerializer.Deserialize<WarehouseStock>(json, GetJsonOptions());
-                
+                var stock = JsonSerializer.Deserialize<WarehouseStock>(json, JsonOptions);
                 _logger.LogDebug("Successfully retrieved stock from Warehouse: {ProductId}, Quantity: {Quantity}", 
                     productId, stock?.Quantity);
-                
-                return new WarehouseResponse<WarehouseStock>
-                {
-                    Success = true,
-                    Data = stock,
-                    RequestId = Guid.NewGuid().ToString()
-                };
-            }
-
-            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
-            {
-                _logger.LogDebug("Stock not found in Warehouse: {ProductId}", productId);
-                
-                // Return default stock for non-existent products
-                return new WarehouseResponse<WarehouseStock>
-                {
-                    Success = true,
-                    Data = new WarehouseStock
-                    {
-                        ProductId = productId,
-                        Quantity = 0,
-                        InStock = false,
-                        LastUpdated = DateTime.UtcNow
-                    },
-                    RequestId = Guid.NewGuid().ToString()
-                };
-            }
-
-            var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
-            _logger.LogError("Warehouse service error for stock {ProductId}: {StatusCode} - {Content}", 
-                productId, response.StatusCode, errorContent);
-            
-            return new WarehouseResponse<WarehouseStock>
-            {
-                Success = false,
-                ErrorMessage = $"Warehouse service error: {response.StatusCode}",
-                RequestId = Guid.NewGuid().ToString()
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Unexpected error getting stock from Warehouse: {ProductId}", productId);
-            
-            // Return default stock on errors for graceful degradation
-            return new WarehouseResponse<WarehouseStock>
-            {
-                Success = true,
-                Data = new WarehouseStock
-                {
-                    ProductId = productId,
-                    Quantity = 0,
-                    InStock = false,
-                    LastUpdated = DateTime.UtcNow
-                },
-                RequestId = Guid.NewGuid().ToString()
-            };
-        }
+                return stock;
+            },
+            () => CreateDefaultStock(productId),
+            $"getting stock for {productId}"
+        );
     }
 
     public async Task<WarehouseResponse<BulkStockResponse>> GetBulkStockAsync(List<string> productIds, CancellationToken cancellationToken = default)
     {
-        try
-        {
-            _logger.LogDebug("Getting bulk stock from Warehouse: {ProductCount} products", productIds.Count);
+        if (productIds == null)
+            throw new ArgumentNullException(nameof(productIds));
+        if (productIds.Count == 0)
+            return CreateSuccessResponse(new BulkStockResponse { Stocks = new List<WarehouseStock>() });
+        if (productIds.Count > 1000)
+            throw new ArgumentException("Cannot request more than 1000 products at once", nameof(productIds));
             
-            var queryString = string.Join("&", productIds.Select(id => $"productIds={Uri.EscapeDataString(id)}"));
-            
-            var response = await _httpClient.GetAsync($"/api/stock/bulk?{queryString}", cancellationToken);
-
-            if (response.IsSuccessStatusCode)
+        return await ExecuteWithFallbackAsync<BulkStockResponse>(
+            async () =>
+            {
+                _logger.LogDebug("Getting bulk stock from Warehouse: {ProductCount} products", productIds.Count);
+                
+                // Use POST for large requests to avoid URL length limits
+                if (productIds.Count > 50)
+                {
+                    return await PostBulkStockRequest(productIds, cancellationToken);
+                }
+                
+                // Use GET for smaller requests
+                var queryString = string.Join("&", productIds.Select(id => $"productIds={Uri.EscapeDataString(id)}"));
+                return await _httpClient.GetAsync($"/api/stock/bulk?{queryString}", cancellationToken);
+            },
+            async response =>
             {
                 var json = await response.Content.ReadAsStringAsync(cancellationToken);
-                var bulkResponse = JsonSerializer.Deserialize<BulkStockResponse>(json, GetJsonOptions()) 
+                var bulkResponse = JsonSerializer.Deserialize<BulkStockResponse>(json, JsonOptions) 
                                    ?? new BulkStockResponse();
                 
                 _logger.LogDebug("Successfully retrieved bulk stock from Warehouse: {FoundCount} found, {NotFoundCount} not found", 
                     bulkResponse.Stocks.Count, bulkResponse.NotFound.Count);
                 
-                return new WarehouseResponse<BulkStockResponse>
+                return bulkResponse;
+            },
+            () => new BulkStockResponse 
+            { 
+                Stocks = productIds.Select(CreateDefaultStock).ToList() 
+            },
+            "getting bulk stock"
+        );
+    }
+
+    private async Task<HttpResponseMessage> PostBulkStockRequest(List<string> productIds, CancellationToken cancellationToken)
+    {
+        var requestBody = new { ProductIds = productIds };
+        var json = JsonSerializer.Serialize(requestBody, JsonOptions);
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
+        
+        return await _httpClient.PostAsync("/api/stock/bulk", content, cancellationToken);
+    }
+
+    private static WarehouseStock CreateDefaultStock(string productId)
+    {
+        return new WarehouseStock
+        {
+            ProductId = productId,
+            Quantity = 0,
+            InStock = false,
+            LastUpdated = DateTime.UtcNow
+        };
+    }
+
+    private static WarehouseResponse<T> CreateSuccessResponse<T>(T data)
+    {
+        return new WarehouseResponse<T>
+        {
+            Success = true,
+            Data = data,
+            RequestId = Guid.NewGuid().ToString()
+        };
+    }
+
+    private async Task<WarehouseResponse<T>> ExecuteWithFallbackAsync<T>(
+        Func<Task<HttpResponseMessage>> httpOperation,
+        Func<HttpResponseMessage, Task<T>> successHandler,
+        Func<T> fallbackHandler,
+        string operationDescription)
+    {
+        var requestId = Guid.NewGuid().ToString();
+        
+        try
+        {
+            using var response = await httpOperation();
+
+            if (response.IsSuccessStatusCode)
+            {
+                var data = await successHandler(response);
+                return new WarehouseResponse<T>
                 {
                     Success = true,
-                    Data = bulkResponse,
-                    RequestId = Guid.NewGuid().ToString()
+                    Data = data,
+                    RequestId = requestId
                 };
             }
 
-            var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
-            _logger.LogError("Warehouse service error for bulk stock: {StatusCode} - {Content}", 
-                response.StatusCode, errorContent);
+            if (response.StatusCode == HttpStatusCode.NotFound)
+            {
+                _logger.LogDebug("Resource not found in Warehouse for {Operation}. Using fallback.", operationDescription);
+                
+                // Return fallback data for NotFound (warehouse-specific business logic)
+                return new WarehouseResponse<T>
+                {
+                    Success = true,
+                    Data = fallbackHandler(),
+                    RequestId = requestId
+                };
+            }
+
+            var errorContent = await response.Content.ReadAsStringAsync();
+            var errorMessage = $"Warehouse service error: {response.StatusCode}";
             
-            return new WarehouseResponse<BulkStockResponse>
+            _logger.LogError("Warehouse service error {Operation}: {StatusCode} - {Content}", 
+                operationDescription, response.StatusCode, errorContent);
+            
+            return new WarehouseResponse<T>
             {
                 Success = false,
-                ErrorMessage = $"Warehouse service error: {response.StatusCode}",
-                RequestId = Guid.NewGuid().ToString()
+                ErrorMessage = errorMessage,
+                RequestId = requestId
+            };
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "HTTP request failed while {Operation}. Using fallback.", operationDescription);
+            
+            // Warehouse service graceful degradation - return fallback data
+            return new WarehouseResponse<T>
+            {
+                Success = true,
+                Data = fallbackHandler(),
+                RequestId = requestId
+            };
+        }
+        catch (TaskCanceledException ex) when (ex.InnerException is TimeoutException)
+        {
+            _logger.LogError(ex, "Request timeout while {Operation}. Using fallback.", operationDescription);
+            
+            // Warehouse service graceful degradation - return fallback data
+            return new WarehouseResponse<T>
+            {
+                Success = true,
+                Data = fallbackHandler(),
+                RequestId = requestId
             };
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Unexpected error getting bulk stock from Warehouse");
+            _logger.LogError(ex, "Unexpected error while {Operation}. Using fallback.", operationDescription);
             
-            // Return default stock for all products on errors
-            var defaultStocks = productIds.Select(id => new WarehouseStock
-            {
-                ProductId = id,
-                Quantity = 0,
-                InStock = false,
-                LastUpdated = DateTime.UtcNow
-            }).ToList();
-            
-            return new WarehouseResponse<BulkStockResponse>
+            // Warehouse service graceful degradation - return fallback data
+            return new WarehouseResponse<T>
             {
                 Success = true,
-                Data = new BulkStockResponse { Stocks = defaultStocks },
-                RequestId = Guid.NewGuid().ToString()
+                Data = fallbackHandler(),
+                RequestId = requestId
             };
         }
-    }
-
-    private static JsonSerializerOptions GetJsonOptions()
-    {
-        return new JsonSerializerOptions
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            PropertyNameCaseInsensitive = true
-        };
     }
 }

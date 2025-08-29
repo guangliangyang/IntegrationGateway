@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
@@ -10,6 +11,11 @@ public class ErpService : IErpService
 {
     private readonly HttpClient _httpClient;
     private readonly ILogger<ErpService> _logger;
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true
+    };
 
     public ErpService(IHttpClientFactory httpClientFactory, ILogger<ErpService> logger)
     {
@@ -20,273 +26,187 @@ public class ErpService : IErpService
 
     public async Task<ErpResponse<ErpProduct>> GetProductAsync(string productId, CancellationToken cancellationToken = default)
     {
-        try
-        {
-            _logger.LogDebug("Getting product from ERP: {ProductId}", productId);
+        if (string.IsNullOrWhiteSpace(productId))
+            throw new ArgumentException("Product ID cannot be null or empty", nameof(productId));
             
-            var response = await _httpClient.GetAsync($"/api/products/{productId}", cancellationToken);
-
-            if (response.IsSuccessStatusCode)
+        return await ExecuteAsync<ErpProduct>(
+            async () =>
             {
-                var json = await response.Content.ReadAsStringAsync(cancellationToken);
-                var product = JsonSerializer.Deserialize<ErpProduct>(json, GetJsonOptions());
-                
-                _logger.LogDebug("Successfully retrieved product from ERP: {ProductId}", productId);
-                
-                return new ErpResponse<ErpProduct>
-                {
-                    Success = true,
-                    Data = product,
-                    RequestId = Guid.NewGuid().ToString()
-                };
-            }
-
-            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
-            {
-                return new ErpResponse<ErpProduct>
-                {
-                    Success = false,
-                    ErrorMessage = "Product not found",
-                    RequestId = Guid.NewGuid().ToString()
-                };
-            }
-
-            var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
-            _logger.LogError("ERP service error for product {ProductId}: {StatusCode} - {Content}", 
-                productId, response.StatusCode, errorContent);
-            
-            return new ErpResponse<ErpProduct>
-            {
-                Success = false,
-                ErrorMessage = $"ERP service error: {response.StatusCode}",
-                RequestId = Guid.NewGuid().ToString()
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Unexpected error getting product from ERP: {ProductId}", productId);
-            return new ErpResponse<ErpProduct>
-            {
-                Success = false,
-                ErrorMessage = "Internal error occurred",
-                RequestId = Guid.NewGuid().ToString()
-            };
-        }
+                _logger.LogDebug("Getting product from ERP: {ProductId}", productId);
+                return await _httpClient.GetAsync($"/api/products/{productId}", cancellationToken);
+            },
+            async response => JsonSerializer.Deserialize<ErpProduct>(await response.Content.ReadAsStringAsync(cancellationToken), JsonOptions),
+            $"getting product {productId}"
+        );
     }
 
     public async Task<ErpResponse<List<ErpProduct>>> GetProductsAsync(CancellationToken cancellationToken = default)
     {
-        try
-        {
-            _logger.LogDebug("Getting all products from ERP");
-            
-            var response = await _httpClient.GetAsync("/api/products", cancellationToken);
-
-            if (response.IsSuccessStatusCode)
+        return await ExecuteAsync<List<ErpProduct>>(
+            async () =>
+            {
+                _logger.LogDebug("Getting all products from ERP");
+                return await _httpClient.GetAsync("/api/products", cancellationToken);
+            },
+            async response =>
             {
                 var json = await response.Content.ReadAsStringAsync(cancellationToken);
-                var products = JsonSerializer.Deserialize<List<ErpProduct>>(json, GetJsonOptions()) ?? new List<ErpProduct>();
-                
+                var products = JsonSerializer.Deserialize<List<ErpProduct>>(json, JsonOptions) ?? new List<ErpProduct>();
                 _logger.LogDebug("Successfully retrieved {Count} products from ERP", products.Count);
-                
-                return new ErpResponse<List<ErpProduct>>
-                {
-                    Success = true,
-                    Data = products,
-                    RequestId = Guid.NewGuid().ToString()
-                };
-            }
-
-            var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
-            _logger.LogError("ERP service error getting products: {StatusCode} - {Content}", 
-                response.StatusCode, errorContent);
-            
-            return new ErpResponse<List<ErpProduct>>
-            {
-                Success = false,
-                ErrorMessage = $"ERP service error: {response.StatusCode}",
-                RequestId = Guid.NewGuid().ToString()
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Unexpected error getting products from ERP");
-            return new ErpResponse<List<ErpProduct>>
-            {
-                Success = false,
-                ErrorMessage = "Internal error occurred",
-                RequestId = Guid.NewGuid().ToString()
-            };
-        }
+                return products;
+            },
+            "getting products"
+        );
     }
 
     public async Task<ErpResponse<ErpProduct>> CreateProductAsync(ErpProductRequest request, CancellationToken cancellationToken = default)
     {
-        try
-        {
-            _logger.LogDebug("Creating product in ERP: {ProductName}", request.Name);
+        if (request == null)
+            throw new ArgumentNullException(nameof(request));
             
-            var json = JsonSerializer.Serialize(request, GetJsonOptions());
-            var content = new StringContent(json, Encoding.UTF8, "application/json");
-            
-            var response = await _httpClient.PostAsync("/api/products", content, cancellationToken);
-
-            if (response.IsSuccessStatusCode)
+        return await ExecuteAsync<ErpProduct>(
+            async () =>
             {
-                var responseJson = await response.Content.ReadAsStringAsync(cancellationToken);
-                var product = JsonSerializer.Deserialize<ErpProduct>(responseJson, GetJsonOptions());
+                _logger.LogDebug("Creating product in ERP: {ProductName}", request.Name);
                 
+                var json = JsonSerializer.Serialize(request, JsonOptions);
+                using var content = new StringContent(json, Encoding.UTF8, "application/json");
+                
+                return await _httpClient.PostAsync("/api/products", content, cancellationToken);
+            },
+            async response =>
+            {
+                var json = await response.Content.ReadAsStringAsync(cancellationToken);
+                var product = JsonSerializer.Deserialize<ErpProduct>(json, JsonOptions);
                 _logger.LogDebug("Successfully created product in ERP: {ProductId}", product?.Id);
-                
-                return new ErpResponse<ErpProduct>
-                {
-                    Success = true,
-                    Data = product,
-                    RequestId = Guid.NewGuid().ToString()
-                };
-            }
-
-            var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
-            _logger.LogError("ERP service error creating product {ProductName}: {StatusCode} - {Content}", 
-                request.Name, response.StatusCode, errorContent);
-            
-            return new ErpResponse<ErpProduct>
-            {
-                Success = false,
-                ErrorMessage = $"ERP service error: {response.StatusCode}",
-                RequestId = Guid.NewGuid().ToString()
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Unexpected error creating product in ERP: {ProductName}", request.Name);
-            return new ErpResponse<ErpProduct>
-            {
-                Success = false,
-                ErrorMessage = "Internal error occurred",
-                RequestId = Guid.NewGuid().ToString()
-            };
-        }
+                return product;
+            },
+            $"creating product {request.Name}"
+        );
     }
 
     public async Task<ErpResponse<ErpProduct>> UpdateProductAsync(string productId, ErpProductRequest request, CancellationToken cancellationToken = default)
     {
-        try
-        {
-            _logger.LogDebug("Updating product in ERP: {ProductId}", productId);
+        if (string.IsNullOrWhiteSpace(productId))
+            throw new ArgumentException("Product ID cannot be null or empty", nameof(productId));
+        if (request == null)
+            throw new ArgumentNullException(nameof(request));
             
-            var json = JsonSerializer.Serialize(request, GetJsonOptions());
-            var content = new StringContent(json, Encoding.UTF8, "application/json");
-            
-            var response = await _httpClient.PutAsync($"/api/products/{productId}", content, cancellationToken);
-
-            if (response.IsSuccessStatusCode)
+        return await ExecuteAsync<ErpProduct>(
+            async () =>
             {
-                var responseJson = await response.Content.ReadAsStringAsync(cancellationToken);
-                var product = JsonSerializer.Deserialize<ErpProduct>(responseJson, GetJsonOptions());
+                _logger.LogDebug("Updating product in ERP: {ProductId}", productId);
                 
+                var json = JsonSerializer.Serialize(request, JsonOptions);
+                using var content = new StringContent(json, Encoding.UTF8, "application/json");
+                
+                return await _httpClient.PutAsync($"/api/products/{productId}", content, cancellationToken);
+            },
+            async response =>
+            {
+                var json = await response.Content.ReadAsStringAsync(cancellationToken);
+                var product = JsonSerializer.Deserialize<ErpProduct>(json, JsonOptions);
                 _logger.LogDebug("Successfully updated product in ERP: {ProductId}", productId);
-                
-                return new ErpResponse<ErpProduct>
-                {
-                    Success = true,
-                    Data = product,
-                    RequestId = Guid.NewGuid().ToString()
-                };
-            }
-
-            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
-            {
-                return new ErpResponse<ErpProduct>
-                {
-                    Success = false,
-                    ErrorMessage = "Product not found",
-                    RequestId = Guid.NewGuid().ToString()
-                };
-            }
-
-            var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
-            _logger.LogError("ERP service error updating product {ProductId}: {StatusCode} - {Content}", 
-                productId, response.StatusCode, errorContent);
-            
-            return new ErpResponse<ErpProduct>
-            {
-                Success = false,
-                ErrorMessage = $"ERP service error: {response.StatusCode}",
-                RequestId = Guid.NewGuid().ToString()
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Unexpected error updating product in ERP: {ProductId}", productId);
-            return new ErpResponse<ErpProduct>
-            {
-                Success = false,
-                ErrorMessage = "Internal error occurred",
-                RequestId = Guid.NewGuid().ToString()
-            };
-        }
+                return product;
+            },
+            $"updating product {productId}"
+        );
     }
 
     public async Task<ErpResponse<bool>> DeleteProductAsync(string productId, CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrWhiteSpace(productId))
+            throw new ArgumentException("Product ID cannot be null or empty", nameof(productId));
+            
+        return await ExecuteAsync<bool>(
+            async () =>
+            {
+                _logger.LogDebug("Deleting product in ERP: {ProductId}", productId);
+                return await _httpClient.DeleteAsync($"/api/products/{productId}", cancellationToken);
+            },
+            async response =>
+            {
+                _logger.LogDebug("Successfully deleted product in ERP: {ProductId}", productId);
+                return true;
+            },
+            $"deleting product {productId}"
+        );
+    }
+
+    private async Task<ErpResponse<T>> ExecuteAsync<T>(
+        Func<Task<HttpResponseMessage>> httpOperation,
+        Func<HttpResponseMessage, Task<T>> successHandler,
+        string operationDescription)
+    {
+        var requestId = Guid.NewGuid().ToString();
+        
         try
         {
-            _logger.LogDebug("Deleting product in ERP: {ProductId}", productId);
-            
-            var response = await _httpClient.DeleteAsync($"/api/products/{productId}", cancellationToken);
+            using var response = await httpOperation();
 
             if (response.IsSuccessStatusCode)
             {
-                _logger.LogDebug("Successfully deleted product in ERP: {ProductId}", productId);
-                
-                return new ErpResponse<bool>
+                var data = await successHandler(response);
+                return new ErpResponse<T>
                 {
                     Success = true,
-                    Data = true,
-                    RequestId = Guid.NewGuid().ToString()
+                    Data = data,
+                    RequestId = requestId
                 };
             }
 
-            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            if (response.StatusCode == HttpStatusCode.NotFound)
             {
-                return new ErpResponse<bool>
+                return new ErpResponse<T>
                 {
                     Success = false,
-                    ErrorMessage = "Product not found",
-                    RequestId = Guid.NewGuid().ToString()
+                    ErrorMessage = "Resource not found",
+                    RequestId = requestId
                 };
             }
 
-            var errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
-            _logger.LogError("ERP service error deleting product {ProductId}: {StatusCode} - {Content}", 
-                productId, response.StatusCode, errorContent);
+            var errorContent = await response.Content.ReadAsStringAsync();
+            var errorMessage = $"ERP service error: {response.StatusCode}";
             
-            return new ErpResponse<bool>
+            _logger.LogError("ERP service error {Operation}: {StatusCode} - {Content}", 
+                operationDescription, response.StatusCode, errorContent);
+            
+            return new ErpResponse<T>
             {
                 Success = false,
-                ErrorMessage = $"ERP service error: {response.StatusCode}",
-                RequestId = Guid.NewGuid().ToString()
+                ErrorMessage = errorMessage,
+                RequestId = requestId
+            };
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "HTTP request failed while {Operation}", operationDescription);
+            return new ErpResponse<T>
+            {
+                Success = false,
+                ErrorMessage = "Network error occurred",
+                RequestId = requestId
+            };
+        }
+        catch (TaskCanceledException ex) when (ex.InnerException is TimeoutException)
+        {
+            _logger.LogError(ex, "Request timeout while {Operation}", operationDescription);
+            return new ErpResponse<T>
+            {
+                Success = false,
+                ErrorMessage = "Request timeout",
+                RequestId = requestId
             };
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Unexpected error deleting product in ERP: {ProductId}", productId);
-            return new ErpResponse<bool>
+            _logger.LogError(ex, "Unexpected error while {Operation}", operationDescription);
+            return new ErpResponse<T>
             {
                 Success = false,
                 ErrorMessage = "Internal error occurred",
-                RequestId = Guid.NewGuid().ToString()
+                RequestId = requestId
             };
         }
-    }
-
-    private static JsonSerializerOptions GetJsonOptions()
-    {
-        return new JsonSerializerOptions
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            PropertyNameCaseInsensitive = true
-        };
     }
 }

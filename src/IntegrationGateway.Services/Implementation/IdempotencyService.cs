@@ -168,9 +168,22 @@ public class IdempotencyService : IIdempotencyService
                 }
             }
 
-            if (expiredKeys.Count > 0)
+            // Additional cleanup: remove locks for keys that no longer exist in store
+            // This handles cases where locks might accumulate without corresponding store entries
+            var orphanedLockKeys = _locks.Keys.Except(_store.Keys).ToList();
+            foreach (var orphanedKey in orphanedLockKeys)
             {
-                _logger.LogInformation("Cleaned up {Count} expired idempotency keys and locks", expiredKeys.Count);
+                if (_locks.TryRemove(orphanedKey, out var orphanedSemaphore))
+                {
+                    orphanedSemaphore?.Dispose();
+                }
+            }
+
+            var totalCleaned = expiredKeys.Count + orphanedLockKeys.Count;
+            if (totalCleaned > 0)
+            {
+                _logger.LogInformation("Cleaned up {ExpiredCount} expired idempotency keys and {OrphanedCount} orphaned locks", 
+                    expiredKeys.Count, orphanedLockKeys.Count);
             }
         }
         catch (Exception ex)

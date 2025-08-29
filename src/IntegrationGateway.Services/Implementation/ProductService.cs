@@ -28,307 +28,181 @@ public class ProductService : IProductService
 
     public async Task<ProductListResponse> GetProductsAsync(int page = 1, int pageSize = 50, CancellationToken cancellationToken = default)
     {
+        ValidatePaginationParameters(page, pageSize);
         _logger.LogDebug("Getting products list, page: {Page}, size: {PageSize}", page, pageSize);
 
-        try
+        var erpProducts = await GetErpProductsAsync(cancellationToken);
+        var stockLookup = await GetBulkStockLookupAsync(erpProducts.Select(p => p.Id), cancellationToken);
+        
+        var mergedProducts = erpProducts.Select(erpProduct =>
         {
-            // Get products from ERP
-            var erpResponse = await _erpService.GetProductsAsync(cancellationToken);
-            if (!erpResponse.Success || erpResponse.Data == null)
-            {
-                _logger.LogError("Failed to get products from ERP: {ErrorMessage}", erpResponse.ErrorMessage);
-                return new ProductListResponse { Products = new List<ProductDto>() };
-            }
+            stockLookup.TryGetValue(erpProduct.Id, out var stock);
+            return MapToProductDto(erpProduct, stock);
+        }).ToList();
 
-            var erpProducts = erpResponse.Data;
-            _logger.LogDebug("Retrieved {Count} products from ERP", erpProducts.Count);
+        var paginatedProducts = mergedProducts
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToList();
 
-            // Get stock information in bulk
-            var productIds = erpProducts.Select(p => p.Id).ToList();
-            var warehouseResponse = await _warehouseService.GetBulkStockAsync(productIds, cancellationToken);
-            
-            var stockLookup = new Dictionary<string, WarehouseStock>();
-            if (warehouseResponse.Success && warehouseResponse.Data != null)
-            {
-                stockLookup = warehouseResponse.Data.Stocks.ToDictionary(s => s.ProductId, s => s);
-                _logger.LogDebug("Retrieved stock for {Count} products from Warehouse", stockLookup.Count);
-            }
-            else
-            {
-                _logger.LogWarning("Failed to get stock from Warehouse: {ErrorMessage}", warehouseResponse.ErrorMessage);
-            }
-
-            // Merge ERP and Warehouse data
-            var mergedProducts = erpProducts.Select(erpProduct =>
-            {
-                stockLookup.TryGetValue(erpProduct.Id, out var stock);
-                return MapToProductDto(erpProduct, stock);
-            }).ToList();
-
-            // Apply pagination
-            var paginatedProducts = mergedProducts
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
-                .ToList();
-
-            var response = new ProductListResponse
-            {
-                Products = paginatedProducts,
-                Total = mergedProducts.Count,
-                Page = page,
-                PageSize = pageSize
-            };
-
-            _logger.LogDebug("Returning {Count} products for page {Page}", paginatedProducts.Count, page);
-            return response;
-        }
-        catch (Exception ex)
+        var response = new ProductListResponse
         {
-            _logger.LogError(ex, "Error getting products list");
-            return new ProductListResponse { Products = new List<ProductDto>() };
-        }
+            Products = paginatedProducts,
+            Total = mergedProducts.Count,
+            Page = page,
+            PageSize = pageSize
+        };
+
+        _logger.LogDebug("Returning {Count} products for page {Page}", paginatedProducts.Count, page);
+        return response;
     }
 
     public async Task<ProductListV2Response> GetProductsV2Async(int page = 1, int pageSize = 50, CancellationToken cancellationToken = default)
     {
+        ValidatePaginationParameters(page, pageSize);
         _logger.LogDebug("Getting products list V2, page: {Page}, size: {PageSize}", page, pageSize);
 
-        try
+        var erpProducts = await GetErpProductsAsync(cancellationToken);
+        var stockLookup = await GetBulkStockLookupAsync(erpProducts.Select(p => p.Id), cancellationToken);
+        
+        var mergedProducts = erpProducts.Select(erpProduct =>
         {
-            // Get products from ERP
-            var erpResponse = await _erpService.GetProductsAsync(cancellationToken);
-            if (!erpResponse.Success || erpResponse.Data == null)
-            {
-                _logger.LogError("Failed to get products from ERP: {ErrorMessage}", erpResponse.ErrorMessage);
-                return new ProductListV2Response { Products = new List<ProductV2Dto>() };
-            }
+            stockLookup.TryGetValue(erpProduct.Id, out var stock);
+            return MapToProductV2Dto(erpProduct, stock);
+        }).ToList();
 
-            var erpProducts = erpResponse.Data;
-            _logger.LogDebug("Retrieved {Count} products from ERP for V2", erpProducts.Count);
+        var paginatedProducts = mergedProducts
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToList();
 
-            // Get stock information in bulk
-            var productIds = erpProducts.Select(p => p.Id).ToList();
-            var warehouseResponse = await _warehouseService.GetBulkStockAsync(productIds, cancellationToken);
-            
-            var stockLookup = new Dictionary<string, WarehouseStock>();
-            if (warehouseResponse.Success && warehouseResponse.Data != null)
-            {
-                stockLookup = warehouseResponse.Data.Stocks.ToDictionary(s => s.ProductId, s => s);
-                _logger.LogDebug("Retrieved stock for {Count} products from Warehouse for V2", stockLookup.Count);
-            }
-
-            // Merge ERP and Warehouse data with V2 mapping
-            var mergedProducts = erpProducts.Select(erpProduct =>
-            {
-                stockLookup.TryGetValue(erpProduct.Id, out var stock);
-                return MapToProductV2Dto(erpProduct, stock);
-            }).ToList();
-
-            // Apply pagination
-            var paginatedProducts = mergedProducts
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
-                .ToList();
-
-            var response = new ProductListV2Response
-            {
-                Products = paginatedProducts,
-                Total = mergedProducts.Count,
-                Page = page,
-                PageSize = pageSize
-            };
-
-            _logger.LogDebug("Returning {Count} products V2 for page {Page}", paginatedProducts.Count, page);
-            return response;
-        }
-        catch (Exception ex)
+        var response = new ProductListV2Response
         {
-            _logger.LogError(ex, "Error getting products list V2");
-            return new ProductListV2Response { Products = new List<ProductV2Dto>() };
-        }
+            Products = paginatedProducts,
+            Total = mergedProducts.Count,
+            Page = page,
+            PageSize = pageSize
+        };
+
+        _logger.LogDebug("Returning {Count} products V2 for page {Page}", paginatedProducts.Count, page);
+        return response;
     }
 
     public async Task<ProductDto?> GetProductAsync(string productId, CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrWhiteSpace(productId))
+            throw new ArgumentException("Product ID cannot be null or empty", nameof(productId));
+            
         _logger.LogDebug("Getting product by ID: {ProductId}", productId);
 
-        try
+        var erpProduct = await GetErpProductByIdAsync(productId, cancellationToken);
+        if (erpProduct == null)
         {
-            // Get product from ERP
-            var erpResponse = await _erpService.GetProductAsync(productId, cancellationToken);
-            if (!erpResponse.Success || erpResponse.Data == null)
-            {
-                _logger.LogWarning("Product {ProductId} not found in ERP", productId);
-                return null;
-            }
-
-            var erpProduct = erpResponse.Data;
-            _logger.LogDebug("Retrieved product {ProductId} from ERP", productId);
-
-            // Get stock information
-            var warehouseResponse = await _warehouseService.GetStockAsync(productId, cancellationToken);
-            WarehouseStock? stock = null;
-            
-            if (warehouseResponse.Success && warehouseResponse.Data != null)
-            {
-                stock = warehouseResponse.Data;
-                _logger.LogDebug("Retrieved stock for product {ProductId} from Warehouse", productId);
-            }
-            else
-            {
-                _logger.LogWarning("Failed to get stock for product {ProductId}: {ErrorMessage}", 
-                    productId, warehouseResponse.ErrorMessage);
-            }
-
-            var productDto = MapToProductDto(erpProduct, stock);
-            _logger.LogDebug("Returning product {ProductId}", productId);
-            
-            return productDto;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error getting product {ProductId}", productId);
             return null;
         }
+
+        var stock = await GetWarehouseStockAsync(productId, cancellationToken);
+        var productDto = MapToProductDto(erpProduct, stock);
+        
+        _logger.LogDebug("Returning product {ProductId}", productId);
+        return productDto;
     }
 
     public async Task<ProductV2Dto?> GetProductV2Async(string productId, CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrWhiteSpace(productId))
+            throw new ArgumentException("Product ID cannot be null or empty", nameof(productId));
+            
         _logger.LogDebug("Getting product by ID V2: {ProductId}", productId);
 
-        try
+        var erpProduct = await GetErpProductByIdAsync(productId, cancellationToken);
+        if (erpProduct == null)
         {
-            // Get product from ERP
-            var erpResponse = await _erpService.GetProductAsync(productId, cancellationToken);
-            if (!erpResponse.Success || erpResponse.Data == null)
-            {
-                _logger.LogWarning("Product {ProductId} not found in ERP for V2", productId);
-                return null;
-            }
-
-            var erpProduct = erpResponse.Data;
-            _logger.LogDebug("Retrieved product {ProductId} from ERP for V2", productId);
-
-            // Get stock information
-            var warehouseResponse = await _warehouseService.GetStockAsync(productId, cancellationToken);
-            WarehouseStock? stock = null;
-            
-            if (warehouseResponse.Success && warehouseResponse.Data != null)
-            {
-                stock = warehouseResponse.Data;
-                _logger.LogDebug("Retrieved stock for product {ProductId} from Warehouse for V2", productId);
-            }
-
-            var productV2Dto = MapToProductV2Dto(erpProduct, stock);
-            _logger.LogDebug("Returning product V2 {ProductId}", productId);
-            
-            return productV2Dto;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error getting product V2 {ProductId}", productId);
             return null;
         }
+
+        var stock = await GetWarehouseStockAsync(productId, cancellationToken);
+        var productV2Dto = MapToProductV2Dto(erpProduct, stock);
+        
+        _logger.LogDebug("Returning product V2 {ProductId}", productId);
+        return productV2Dto;
     }
 
     public async Task<ProductDto> CreateProductAsync(CreateProductRequest request, CancellationToken cancellationToken = default)
     {
+        if (request == null)
+            throw new ArgumentNullException(nameof(request));
+            
         _logger.LogDebug("Creating product: {Name}", request.Name);
 
-        try
+        var createRequest = new ErpProductRequest
         {
-            var createRequest = new ErpProductRequest
-            {
-                Name = request.Name,
-                Description = request.Description,
-                Price = request.Price,
-                Category = request.Category,
-                IsActive = request.IsActive
-            };
+            Name = request.Name,
+            Description = request.Description,
+            Price = request.Price,
+            Category = request.Category,
+            IsActive = request.IsActive
+        };
 
-            var erpResponse = await _erpService.CreateProductAsync(createRequest, cancellationToken);
-            if (!erpResponse.Success || erpResponse.Data == null)
-            {
-                throw new InvalidOperationException($"Failed to create product: {erpResponse.ErrorMessage}");
-            }
-
-            var createdProduct = erpResponse.Data;
-            _logger.LogDebug("Created product {ProductId} in ERP", createdProduct.Id);
-
-            // Note: Cache invalidation is now handled by MediatR CacheInvalidationBehaviour
-            
-            return MapToProductDto(createdProduct, null);
-        }
-        catch (Exception ex)
+        var erpResponse = await _erpService.CreateProductAsync(createRequest, cancellationToken);
+        if (!erpResponse.Success || erpResponse.Data == null)
         {
-            _logger.LogError(ex, "Error creating product {Name}", request.Name);
-            throw;
+            throw new InvalidOperationException($"Failed to create product: {erpResponse.ErrorMessage}");
         }
+
+        var createdProduct = erpResponse.Data;
+        _logger.LogDebug("Created product {ProductId} in ERP", createdProduct.Id);
+        
+        return MapToProductDto(createdProduct, null);
     }
 
     public async Task<ProductDto> UpdateProductAsync(string productId, UpdateProductRequest request, CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrWhiteSpace(productId))
+            throw new ArgumentException("Product ID cannot be null or empty", nameof(productId));
+        if (request == null)
+            throw new ArgumentNullException(nameof(request));
+            
         _logger.LogDebug("Updating product: {ProductId}", productId);
 
-        try
+        var updateRequest = new ErpProductRequest
         {
-            var updateRequest = new ErpProductRequest
-            {
-                Name = request.Name ?? string.Empty,
-                Description = request.Description,
-                Price = request.Price ?? 0,
-                Category = request.Category ?? string.Empty,
-                IsActive = request.IsActive ?? true
-            };
+            Name = request.Name ?? string.Empty,
+            Description = request.Description,
+            Price = request.Price ?? 0,
+            Category = request.Category ?? string.Empty,
+            IsActive = request.IsActive ?? true
+        };
 
-            var erpResponse = await _erpService.UpdateProductAsync(productId, updateRequest, cancellationToken);
-            if (!erpResponse.Success || erpResponse.Data == null)
-            {
-                throw new InvalidOperationException($"Failed to update product: {erpResponse.ErrorMessage}");
-            }
-
-            var updatedProduct = erpResponse.Data;
-            _logger.LogDebug("Updated product {ProductId} in ERP", productId);
-
-            // Note: Cache invalidation is now handled by MediatR CacheInvalidationBehaviour
-
-            // Get current stock for the response
-            var warehouseResponse = await _warehouseService.GetStockAsync(productId, cancellationToken);
-            var stock = warehouseResponse.Success ? warehouseResponse.Data : null;
-
-            return MapToProductDto(updatedProduct, stock);
-        }
-        catch (Exception ex)
+        var erpResponse = await _erpService.UpdateProductAsync(productId, updateRequest, cancellationToken);
+        if (!erpResponse.Success || erpResponse.Data == null)
         {
-            _logger.LogError(ex, "Error updating product {ProductId}", productId);
-            throw;
+            throw new InvalidOperationException($"Failed to update product: {erpResponse.ErrorMessage}");
         }
+
+        var updatedProduct = erpResponse.Data;
+        _logger.LogDebug("Updated product {ProductId} in ERP", productId);
+
+        var stock = await GetWarehouseStockAsync(productId, cancellationToken);
+        return MapToProductDto(updatedProduct, stock);
     }
 
     public async Task<bool> DeleteProductAsync(string productId, CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrWhiteSpace(productId))
+            throw new ArgumentException("Product ID cannot be null or empty", nameof(productId));
+            
         _logger.LogDebug("Deleting product: {ProductId}", productId);
 
-        try
+        var erpResponse = await _erpService.DeleteProductAsync(productId, cancellationToken);
+        if (!erpResponse.Success)
         {
-            var erpResponse = await _erpService.DeleteProductAsync(productId, cancellationToken);
-            if (!erpResponse.Success)
-            {
-                _logger.LogError("Failed to delete product {ProductId}: {ErrorMessage}", productId, erpResponse.ErrorMessage);
-                return false;
-            }
-
-            _logger.LogDebug("Deleted product {ProductId} from ERP", productId);
-
-            // Note: Cache invalidation is now handled by MediatR CacheInvalidationBehaviour
-            
-            return true;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error deleting product {ProductId}", productId);
+            _logger.LogError("Failed to delete product {ProductId}: {ErrorMessage}", productId, erpResponse.ErrorMessage);
             return false;
         }
+
+        _logger.LogDebug("Deleted product {ProductId} from ERP", productId);
+        return true;
     }
 
     private static ProductDto MapToProductDto(ErpProduct erpProduct, WarehouseStock? stock)
@@ -368,5 +242,70 @@ public class ProductService : IProductService
                 ["LastStockUpdate"] = stock?.LastUpdated.ToString() ?? "Unknown"
             }
         };
+    }
+
+    private static void ValidatePaginationParameters(int page, int pageSize)
+    {
+        if (page <= 0)
+            throw new ArgumentException("Page number must be greater than 0", nameof(page));
+        if (pageSize <= 0 || pageSize > 1000)
+            throw new ArgumentException("Page size must be between 1 and 1000", nameof(pageSize));
+    }
+
+    private async Task<List<ErpProduct>> GetErpProductsAsync(CancellationToken cancellationToken)
+    {
+        var erpResponse = await _erpService.GetProductsAsync(cancellationToken);
+        if (!erpResponse.Success || erpResponse.Data == null)
+        {
+            _logger.LogError("Failed to get products from ERP: {ErrorMessage}", erpResponse.ErrorMessage);
+            throw new InvalidOperationException($"ERP service unavailable: {erpResponse.ErrorMessage}");
+        }
+
+        _logger.LogDebug("Retrieved {Count} products from ERP", erpResponse.Data.Count);
+        return erpResponse.Data;
+    }
+
+    private async Task<ErpProduct?> GetErpProductByIdAsync(string productId, CancellationToken cancellationToken)
+    {
+        var erpResponse = await _erpService.GetProductAsync(productId, cancellationToken);
+        if (!erpResponse.Success || erpResponse.Data == null)
+        {
+            _logger.LogWarning("Product {ProductId} not found in ERP: {ErrorMessage}", productId, erpResponse.ErrorMessage);
+            return null;
+        }
+
+        _logger.LogDebug("Retrieved product {ProductId} from ERP", productId);
+        return erpResponse.Data;
+    }
+
+    private async Task<Dictionary<string, WarehouseStock>> GetBulkStockLookupAsync(IEnumerable<string> productIds, CancellationToken cancellationToken)
+    {
+        var productIdList = productIds.ToList();
+        var warehouseResponse = await _warehouseService.GetBulkStockAsync(productIdList, cancellationToken);
+        
+        if (warehouseResponse.Success && warehouseResponse.Data != null)
+        {
+            var stockLookup = warehouseResponse.Data.Stocks.ToDictionary(s => s.ProductId, s => s);
+            _logger.LogDebug("Retrieved stock for {Count} products from Warehouse", stockLookup.Count);
+            return stockLookup;
+        }
+        
+        _logger.LogWarning("Failed to get stock from Warehouse: {ErrorMessage}. Continuing without stock data.", warehouseResponse.ErrorMessage);
+        return new Dictionary<string, WarehouseStock>();
+    }
+
+    private async Task<WarehouseStock?> GetWarehouseStockAsync(string productId, CancellationToken cancellationToken)
+    {
+        var warehouseResponse = await _warehouseService.GetStockAsync(productId, cancellationToken);
+        
+        if (warehouseResponse.Success && warehouseResponse.Data != null)
+        {
+            _logger.LogDebug("Retrieved stock for product {ProductId} from Warehouse", productId);
+            return warehouseResponse.Data;
+        }
+
+        _logger.LogWarning("Failed to get stock for product {ProductId}: {ErrorMessage}. Continuing without stock data.", 
+            productId, warehouseResponse.ErrorMessage);
+        return null;
     }
 }
