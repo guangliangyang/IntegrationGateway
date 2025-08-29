@@ -12,7 +12,7 @@ public class IdempotencyOptions
     /// <summary>
     /// Default expiration time for idempotency operations
     /// </summary>
-    public TimeSpan DefaultExpirationTime { get; set; } = TimeSpan.FromHours(24);
+    public TimeSpan DefaultExpirationTime { get; set; } = TimeSpan.FromHours(1);
     
     /// <summary>
     /// Maximum time to wait for a semaphore lock
