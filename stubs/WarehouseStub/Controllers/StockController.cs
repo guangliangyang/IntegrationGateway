@@ -31,7 +31,7 @@ public class StockController : ControllerBase
         await Task.Delay(Random.Shared.Next(20, 100));
         
         // Simulate occasional failures for circuit breaker testing
-        if (Random.Shared.Next(1, 100) <= 1) // 1% failure rate
+        if (Random.Shared.Next(1, 100) <= 20) // 1% failure rate
         {
             _logger.LogWarning("Warehouse: Simulated service failure for product {ProductId}", productId);
             return StatusCode(503, new ApiResponse<Stock>
@@ -72,7 +72,7 @@ public class StockController : ControllerBase
         await Task.Delay(Random.Shared.Next(50, 200));
         
         // Simulate occasional failures
-        if (Random.Shared.Next(1, 100) <= 1) // 1% failure rate
+        if (Random.Shared.Next(1, 100) <= 20) // 20% failure rate
         {
             _logger.LogWarning("Warehouse: Simulated bulk service failure");
             return StatusCode(503, new ApiResponse<BulkStockResponse>

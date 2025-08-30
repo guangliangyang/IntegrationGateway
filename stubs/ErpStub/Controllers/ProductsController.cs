@@ -31,7 +31,7 @@ public class ProductsController : ControllerBase
         await Task.Delay(Random.Shared.Next(50, 200));
         
         // Simulate occasional failures for circuit breaker testing
-        if (Random.Shared.Next(1, 100) <= 2) // 2% failure rate
+        if (Random.Shared.Next(1, 100) <= 20) // 20% failure rate
         {
             _logger.LogWarning("ERP: Simulated service failure");
             return StatusCode(503, new ApiResponse<List<Product>>
