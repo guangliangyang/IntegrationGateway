@@ -84,7 +84,7 @@ public class ErpService : IErpService
     public async Task<ErpResponse<ErpProduct>> CreateProductAsync(ErpProductRequest request, CancellationToken cancellationToken = default)
     {
         if (request == null)
-            throw new ArgumentNullException(nameof(request));
+            throw new ValidationException("Request cannot be null");
             
         return await ExecuteAsync<ErpProduct>(
             async () =>
@@ -118,9 +118,9 @@ public class ErpService : IErpService
     public async Task<ErpResponse<ErpProduct>> UpdateProductAsync(string productId, ErpProductRequest request, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(productId))
-            throw new ArgumentException("Product ID cannot be null or empty", nameof(productId));
+            throw new ValidationException("Product ID cannot be null or empty");
         if (request == null)
-            throw new ArgumentNullException(nameof(request));
+            throw new ValidationException("Request cannot be null");
             
         return await ExecuteAsync<ErpProduct>(
             async () =>
@@ -154,7 +154,7 @@ public class ErpService : IErpService
     public async Task<ErpResponse<bool>> DeleteProductAsync(string productId, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(productId))
-            throw new ArgumentException("Product ID cannot be null or empty", nameof(productId));
+            throw new ValidationException("Product ID cannot be null or empty");
             
         return await ExecuteAsync<bool>(
             async () =>
@@ -199,7 +199,8 @@ public class ErpService : IErpService
                 {
                     Success = false,
                     ErrorMessage = "Resource not found",
-                    RequestId = requestId
+                    RequestId = requestId,
+                    StatusCode = 404
                 };
             }
 
@@ -213,7 +214,8 @@ public class ErpService : IErpService
             {
                 Success = false,
                 ErrorMessage = errorMessage,
-                RequestId = requestId
+                RequestId = requestId,
+                StatusCode = (int)response.StatusCode
             };
         }
         catch (HttpRequestException ex)

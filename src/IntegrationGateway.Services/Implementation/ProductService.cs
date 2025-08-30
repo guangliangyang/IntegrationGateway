@@ -153,7 +153,7 @@ public class ProductService : IProductService
         
         if (erpResponse.Data == null)
         {
-            throw new InvalidOperationException("ERP returned success but null product data");
+            throw new ExternalServiceException("ERP", "ERP returned success but null product data");
         }
 
         var createdProduct = erpResponse.Data;
@@ -294,10 +294,19 @@ public class ProductService : IProductService
     private async Task<ErpProduct?> GetErpProductByIdAsync(string productId, CancellationToken cancellationToken)
     {
         var erpResponse = await _erpService.GetProductAsync(productId, cancellationToken);
-        if (!erpResponse.Success)
+        if (erpResponse == null || !erpResponse.Success)
         {
-            _logger.LogError("ERP service error for product {ProductId}: {ErrorMessage}", productId, erpResponse.ErrorMessage);
-            throw new ExternalServiceException("ERP", $"Service error: {erpResponse.ErrorMessage}");
+            // Handle 404 (Not Found) as a business logic case, not a service error
+            if (erpResponse?.StatusCode == 404)
+            {
+                _logger.LogDebug("Product {ProductId} not found in ERP", productId);
+                return null;
+            }
+            
+            // For other errors, treat as external service error
+            var errorMessage = erpResponse?.ErrorMessage ?? "Unknown ERP error";
+            _logger.LogError("ERP service error for product {ProductId}: {ErrorMessage}", productId, errorMessage);
+            throw new ExternalServiceException("ERP", $"Service error: {errorMessage}");
         }
         
         if (erpResponse.Data == null)
@@ -318,7 +327,7 @@ public class ProductService : IProductService
         if (!warehouseResponse.Success)
         {
             _logger.LogError("Warehouse service error: {ErrorMessage}", warehouseResponse.ErrorMessage);
-            throw new InvalidOperationException($"Warehouse service error: {warehouseResponse.ErrorMessage}");
+            throw new ExternalServiceException("Warehouse", $"Warehouse service error: {warehouseResponse.ErrorMessage}");
         }
         
         if (warehouseResponse.Data?.Stocks == null)
@@ -339,7 +348,7 @@ public class ProductService : IProductService
         if (!warehouseResponse.Success)
         {
             _logger.LogError("Warehouse service error for product {ProductId}: {ErrorMessage}", productId, warehouseResponse.ErrorMessage);
-            throw new InvalidOperationException($"Warehouse service error: {warehouseResponse.ErrorMessage}");
+            throw new ExternalServiceException("Warehouse", $"Warehouse service error: {warehouseResponse.ErrorMessage}");
         }
         
         if (warehouseResponse.Data == null)

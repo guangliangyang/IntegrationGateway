@@ -115,6 +115,12 @@ public static class HttpClientExtensions
     /// </summary>
     private static IAsyncPolicy<HttpResponseMessage> GetCircuitBreakerPolicy(CircuitBreakerOptions? options)
     {
+        // If circuit breaker is disabled, return a no-op policy
+        if (options?.Enabled == false)
+        {
+            return Policy.NoOpAsync<HttpResponseMessage>();
+        }
+        
         var failureThreshold = options?.FailureThreshold ?? 5;
         var breakDuration = options?.BreakDuration ?? TimeSpan.FromMinutes(1);
         

@@ -47,6 +47,11 @@ public class CircuitBreakerOptions
     public const string SectionName = "CircuitBreaker";
     
     /// <summary>
+    /// Whether circuit breaker is enabled
+    /// </summary>
+    public bool Enabled { get; set; } = true;
+    
+    /// <summary>
     /// Number of consecutive failures before opening the circuit breaker
     /// </summary>
     public int FailureThreshold { get; set; } = 5;

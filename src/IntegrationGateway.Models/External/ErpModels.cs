@@ -51,4 +51,6 @@ public class ErpResponse<T>
     public string RequestId { get; set; } = string.Empty;
     
     public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+    
+    public int? StatusCode { get; set; }
 }
