@@ -25,4 +25,9 @@
     <ProjectReference Include="..\..\src\IntegrationGateway.Services\IntegrationGateway.Services.csproj" />
     <ProjectReference Include="..\..\src\IntegrationGateway.Models\IntegrationGateway.Models.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="appsettings.Test.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
 </Project>

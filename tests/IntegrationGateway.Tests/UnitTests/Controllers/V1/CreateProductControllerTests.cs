@@ -6,6 +6,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Configuration;
 using Moq;
 using FluentAssertions;
 using MediatR;
@@ -41,6 +43,15 @@ public class CreateProductControllerTests : IDisposable
         _factory = new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder =>
             {
+                // Set test environment
+                Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Test");
+                builder.ConfigureAppConfiguration((context, config) =>
+                {
+                    // Add test-specific configuration
+                    var basePath = Path.GetDirectoryName(typeof(CreateProductControllerTests).Assembly.Location);
+                    config.SetBasePath(basePath!);
+                    config.AddJsonFile("appsettings.Test.json", optional: false, reloadOnChange: false);
+                });
                 builder.ConfigureServices(services =>
                 {
                     // Replace services with mocks for testing
