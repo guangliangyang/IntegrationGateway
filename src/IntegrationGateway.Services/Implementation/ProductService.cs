@@ -294,21 +294,23 @@ public class ProductService : IProductService
     private async Task<ErpProduct?> GetErpProductByIdAsync(string productId, CancellationToken cancellationToken)
     {
         var erpResponse = await _erpService.GetProductAsync(productId, cancellationToken);
+
+        // 404 直接返回 null
+        if (erpResponse?.StatusCode == 404)
+        {
+            _logger.LogDebug("Product {ProductId} not found in ERP", productId);
+            return null;
+        }
+
+        // 其它错误直接抛异常
         if (erpResponse == null || !erpResponse.Success)
         {
-            // Handle 404 (Not Found) as a business logic case, not a service error
-            if (erpResponse?.StatusCode == 404)
-            {
-                _logger.LogDebug("Product {ProductId} not found in ERP", productId);
-                return null;
-            }
-            
-            // For other errors, treat as external service error
             var errorMessage = erpResponse?.ErrorMessage ?? "Unknown ERP error";
             _logger.LogError("ERP service error for product {ProductId}: {ErrorMessage}", productId, errorMessage);
             throw new ExternalServiceException("ERP", $"Service error: {errorMessage}");
         }
-        
+
+        // 数据为空也返回 null
         if (erpResponse.Data == null)
         {
             _logger.LogDebug("Product {ProductId} not found in ERP", productId);
