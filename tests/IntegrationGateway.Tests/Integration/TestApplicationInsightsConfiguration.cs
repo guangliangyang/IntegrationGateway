@@ -57,7 +57,7 @@ public static class TestApplicationInsightsConfiguration
                     {"Security:SsrfProtection:Enabled", "false"} // Disable SSRF protection for testing
                 };
 
-                config.AddInMemoryCollection(inMemoryConfig);
+                config.AddInMemoryCollection(inMemoryConfig.Select(kvp => new KeyValuePair<string, string?>(kvp.Key, kvp.Value)));
             }
         });
 

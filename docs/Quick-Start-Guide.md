@@ -62,7 +62,7 @@ dotnet test --collect:"XPlat Code Coverage"
 dotnet test --filter "IdempotencyConcurrencyTests"
 
 # Run specific performance test
-dotnet test --filter "Concurrent_Operations_Performance_Benchmark"
+dotnet test --filter "GetOrCreateOperationAsync_PerformanceBenchmark"
 ```
 
 ## API Testing

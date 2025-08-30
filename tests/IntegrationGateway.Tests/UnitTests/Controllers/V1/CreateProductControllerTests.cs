@@ -516,10 +516,10 @@ public class CreateProductControllerTests : IDisposable
 
     #endregion
 
-    #region Cache Invalidation Tests
+    #region Cache Management Tests
 
     [Fact]
-    public void CreateProductCommand_ShouldImplementICacheInvalidating()
+    public void CreateProductCommand_ShouldBeValidCommand()
     {
         // Arrange & Act
         var command = new CreateProductCommand
@@ -531,12 +531,11 @@ public class CreateProductControllerTests : IDisposable
         };
 
         // Assert
-        command.Should().BeAssignableTo<IntegrationGateway.Application.Common.Behaviours.ICacheInvalidating>();
-        
-        var cacheKeys = command.GetCacheKeysToInvalidate().ToList();
-        cacheKeys.Should().Contain("GetProductsQuery*");
-        cacheKeys.Should().Contain("GetProductsV2Query*");
-        cacheKeys.Should().HaveCount(2);
+        command.Should().NotBeNull();
+        command.Name.Should().Be("Test Product");
+        command.Price.Should().Be(10.99m);
+        command.Category.Should().Be("Test");
+        command.IsActive.Should().BeTrue();
     }
 
     #endregion

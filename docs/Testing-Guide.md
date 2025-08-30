@@ -70,7 +70,7 @@ dotnet test --filter "V1ProductsIntegrationTests"
 dotnet test --filter "IdempotencyConcurrencyTests"
 
 # Run specific performance test
-dotnet test --filter "Concurrent_Operations_Performance_Benchmark"
+dotnet test --filter "GetOrCreateOperationAsync_PerformanceBenchmark"
 ```
 
 ## Test Categories
@@ -95,7 +95,7 @@ dotnet test --filter "Concurrent_Operations_Performance_Benchmark"
 ```bash
 # Example tests:
 # - GetOrCreateOperationAsync_HighConcurrency_OnlyOneNewOperation
-# - Concurrent_Operations_Performance_Benchmark
+# - GetOrCreateOperationAsync_PerformanceBenchmark
 # - TTL_Expiration_Works_Correctly
 ```
 
