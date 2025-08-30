@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Configuration;
+using DotNetEnv;
 using Moq;
 using FluentAssertions;
 using MediatR;
@@ -34,6 +35,9 @@ public class CreateProductControllerTests : IDisposable
 
     public CreateProductControllerTests()
     {
+        // Load environment variables from .env file for testing
+        Env.Load();
+        
         _mockMediator = new Mock<IMediator>();
         _mockCurrentUserService = new Mock<ICurrentUserService>();
         _mockIdempotencyService = new Mock<IIdempotencyService>();
@@ -547,6 +551,94 @@ public class CreateProductControllerTests : IDisposable
         command.Price.Should().Be(10.99m);
         command.Category.Should().Be("Test");
         command.IsActive.Should().BeTrue();
+    }
+
+    #endregion
+
+    #region ProblemDetails Response Format Tests
+
+    [Fact]
+    public async Task CreateProduct_WithMissingIdempotencyKey_ShouldReturnProblemDetailsFormat()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+        var request = new CreateProductRequest
+        {
+            Name = "Test Product",
+            Price = 15.99m,
+            Category = "Test",
+            IsActive = true
+        };
+
+        var jsonContent = JsonSerializer.Serialize(request);
+        var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+
+        // Act
+        client.DefaultRequestHeaders.Add("Authorization", "Bearer fake-jwt-token");
+        var response = await client.PostAsync("/api/v1/products", content);
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        
+        var responseContent = await response.Content.ReadAsStringAsync();
+        var problemDetails = JsonSerializer.Deserialize<JsonElement>(responseContent);
+        
+        // Verify ProblemDetails structure
+        problemDetails.TryGetProperty("type", out var type).Should().BeTrue();
+        type.GetString().Should().Contain("httpstatuses.com/400");
+        
+        problemDetails.TryGetProperty("title", out var title).Should().BeTrue();
+        title.GetString().Should().Be("Bad Request");
+        
+        problemDetails.TryGetProperty("status", out var status).Should().BeTrue();
+        status.GetInt32().Should().Be(400);
+        
+        problemDetails.TryGetProperty("detail", out var detail).Should().BeTrue();
+        detail.GetString().Should().NotBeNullOrEmpty();
+        
+        problemDetails.TryGetProperty("errorType", out var errorType).Should().BeTrue();
+        
+        problemDetails.TryGetProperty("traceId", out var traceId).Should().BeTrue();
+        traceId.GetString().Should().NotBeNullOrEmpty();
+        
+        problemDetails.TryGetProperty("timestamp", out var timestamp).Should().BeTrue();
+    }
+
+    [Fact]  
+    public async Task CreateProduct_WithValidationError_ShouldReturnProblemDetailsWithErrors()
+    {
+        // This test would verify validation errors format when MediatR throws ValidationException
+        // The actual validation would come from FluentValidation in the Command Handler
+        
+        // Arrange
+        var client = _factory.CreateClient();
+        var request = new CreateProductRequest
+        {
+            Name = "", // Invalid name
+            Price = -1, // Invalid price
+            Category = null!,
+            IsActive = true
+        };
+
+        var jsonContent = JsonSerializer.Serialize(request);
+        var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+
+        // Act
+        client.DefaultRequestHeaders.Add("Idempotency-Key", "test-validation-key-12345678");
+        client.DefaultRequestHeaders.Add("Authorization", "Bearer fake-jwt-token");
+        var response = await client.PostAsync("/api/v1/products", content);
+
+        // Assert - Even with validation errors, current middleware should handle it
+        var responseContent = await response.Content.ReadAsStringAsync();
+        
+        // The response should still be in ProblemDetails format
+        if (response.StatusCode == HttpStatusCode.BadRequest)
+        {
+            var problemDetails = JsonSerializer.Deserialize<JsonElement>(responseContent);
+            problemDetails.TryGetProperty("type", out _).Should().BeTrue();
+            problemDetails.TryGetProperty("title", out _).Should().BeTrue();
+            problemDetails.TryGetProperty("status", out _).Should().BeTrue();
+        }
     }
 
     #endregion

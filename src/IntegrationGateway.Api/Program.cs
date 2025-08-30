@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Mvc;
@@ -115,14 +116,11 @@ builder.Services.AddConfiguredCors(builder.Configuration);
 var app = builder.Build();
 
 // Configure the HTTP request pipeline
-// Add global exception handling first
-if (app.Environment.IsDevelopment())
+// Add global exception handling first (replaces UseExceptionHandler)
+app.UseGlobalExceptionHandling();
+
+if (!app.Environment.IsDevelopment())
 {
-    app.UseDeveloperExceptionPage();
-}
-else
-{
-    app.UseExceptionHandler("/error");
     app.UseHsts();
 }
 
@@ -144,21 +142,6 @@ app.MapControllers();
 
 // Add health check endpoint
 app.MapHealthChecks("/health");
-
-// Add error handling endpoint for production
-app.Map("/error", (HttpContext context) =>
-{
-    var error = new
-    {
-        Type = "https://tools.ietf.org/html/rfc7231#section-6.6.1",
-        Title = "An error occurred while processing your request",
-        Status = 500,
-        TraceId = context.TraceIdentifier,
-        Timestamp = DateTime.UtcNow
-    };
-    
-    return Results.Json(error, statusCode: 500);
-});
 
 // Add a simple root endpoint
 app.MapGet("/", () => new

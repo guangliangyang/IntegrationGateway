@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using IntegrationGateway.Models.External;
 using IntegrationGateway.Services.Interfaces;
+using IntegrationGateway.Models.Exceptions;
 
 namespace IntegrationGateway.Services.Implementation;
 
@@ -27,7 +28,7 @@ public class ErpService : IErpService
     public async Task<ErpResponse<ErpProduct>> GetProductAsync(string productId, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(productId))
-            throw new ArgumentException("Product ID cannot be null or empty", nameof(productId));
+            throw new ValidationException("Product ID cannot be null or empty");
             
         return await ExecuteAsync<ErpProduct>(
             async () =>
@@ -35,7 +36,20 @@ public class ErpService : IErpService
                 _logger.LogDebug("Getting product from ERP: {ProductId}", productId);
                 return await _httpClient.GetAsync($"/api/products/{productId}", cancellationToken);
             },
-            async response => JsonSerializer.Deserialize<ErpProduct>(await response.Content.ReadAsStringAsync(cancellationToken), JsonOptions),
+            async response =>
+            {
+                var json = await response.Content.ReadAsStringAsync(cancellationToken);
+                var apiResponse = JsonSerializer.Deserialize<ApiResponse<ErpProduct>>(json, JsonOptions);
+                
+                if (apiResponse?.Success == true && apiResponse.Data != null)
+                {
+                    return apiResponse.Data;
+                }
+                
+                var errorMsg = apiResponse?.ErrorMessage ?? "Unknown error from ERP";
+                _logger.LogError("ERP API returned error for product {ProductId}: {ErrorMessage}", productId, errorMsg);
+                throw new ExternalServiceException("ERP", errorMsg);
+            },
             $"getting product {productId}"
         );
     }
@@ -51,9 +65,17 @@ public class ErpService : IErpService
             async response =>
             {
                 var json = await response.Content.ReadAsStringAsync(cancellationToken);
-                var products = JsonSerializer.Deserialize<List<ErpProduct>>(json, JsonOptions) ?? new List<ErpProduct>();
-                _logger.LogDebug("Successfully retrieved {Count} products from ERP", products.Count);
-                return products;
+                var apiResponse = JsonSerializer.Deserialize<ApiResponse<List<ErpProduct>>>(json, JsonOptions);
+                
+                if (apiResponse?.Success == true && apiResponse.Data != null)
+                {
+                    _logger.LogDebug("Successfully retrieved {Count} products from ERP", apiResponse.Data.Count);
+                    return apiResponse.Data;
+                }
+                
+                var errorMsg = apiResponse?.ErrorMessage ?? "Unknown error from ERP";
+                _logger.LogError("ERP API returned error: {ErrorMessage}", errorMsg);
+                throw new ExternalServiceException("ERP", errorMsg);
             },
             "getting products"
         );
@@ -77,9 +99,17 @@ public class ErpService : IErpService
             async response =>
             {
                 var json = await response.Content.ReadAsStringAsync(cancellationToken);
-                var product = JsonSerializer.Deserialize<ErpProduct>(json, JsonOptions);
-                _logger.LogDebug("Successfully created product in ERP: {ProductId}", product?.Id);
-                return product;
+                var apiResponse = JsonSerializer.Deserialize<ApiResponse<ErpProduct>>(json, JsonOptions);
+                
+                if (apiResponse?.Success == true && apiResponse.Data != null)
+                {
+                    _logger.LogDebug("Successfully created product in ERP: {ProductId}", apiResponse.Data.Id);
+                    return apiResponse.Data;
+                }
+                
+                var errorMsg = apiResponse?.ErrorMessage ?? "Unknown error from ERP";
+                _logger.LogError("ERP API returned error creating product {ProductName}: {ErrorMessage}", request.Name, errorMsg);
+                throw new ExternalServiceException("ERP", errorMsg);
             },
             $"creating product {request.Name}"
         );
@@ -105,9 +135,17 @@ public class ErpService : IErpService
             async response =>
             {
                 var json = await response.Content.ReadAsStringAsync(cancellationToken);
-                var product = JsonSerializer.Deserialize<ErpProduct>(json, JsonOptions);
-                _logger.LogDebug("Successfully updated product in ERP: {ProductId}", productId);
-                return product;
+                var apiResponse = JsonSerializer.Deserialize<ApiResponse<ErpProduct>>(json, JsonOptions);
+                
+                if (apiResponse?.Success == true && apiResponse.Data != null)
+                {
+                    _logger.LogDebug("Successfully updated product in ERP: {ProductId}", productId);
+                    return apiResponse.Data;
+                }
+                
+                var errorMsg = apiResponse?.ErrorMessage ?? "Unknown error from ERP";
+                _logger.LogError("ERP API returned error updating product {ProductId}: {ErrorMessage}", productId, errorMsg);
+                throw new ExternalServiceException("ERP", errorMsg);
             },
             $"updating product {productId}"
         );

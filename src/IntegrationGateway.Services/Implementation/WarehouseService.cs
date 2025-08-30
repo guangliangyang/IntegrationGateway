@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using IntegrationGateway.Models.External;
 using IntegrationGateway.Services.Interfaces;
+using IntegrationGateway.Models.Exceptions;
 
 namespace IntegrationGateway.Services.Implementation;
 
@@ -27,7 +28,7 @@ public class WarehouseService : IWarehouseService
     public async Task<WarehouseResponse<WarehouseStock>> GetStockAsync(string productId, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(productId))
-            throw new ArgumentException("Product ID cannot be null or empty", nameof(productId));
+            throw new ValidationException("Product ID cannot be null or empty");
             
         return await ExecuteWithFallbackAsync<WarehouseStock>(
             async () =>
@@ -38,10 +39,18 @@ public class WarehouseService : IWarehouseService
             async response =>
             {
                 var json = await response.Content.ReadAsStringAsync(cancellationToken);
-                var stock = JsonSerializer.Deserialize<WarehouseStock>(json, JsonOptions);
-                _logger.LogDebug("Successfully retrieved stock from Warehouse: {ProductId}, Quantity: {Quantity}", 
-                    productId, stock?.Quantity);
-                return stock;
+                var apiResponse = JsonSerializer.Deserialize<ApiResponse<WarehouseStock>>(json, JsonOptions);
+                
+                if (apiResponse?.Success == true && apiResponse.Data != null)
+                {
+                    _logger.LogDebug("Successfully retrieved stock from Warehouse: {ProductId}, Quantity: {Quantity}", 
+                        productId, apiResponse.Data.Quantity);
+                    return apiResponse.Data;
+                }
+                
+                var errorMsg = apiResponse?.ErrorMessage ?? "Unknown error from Warehouse";
+                _logger.LogError("Warehouse API returned error for stock {ProductId}: {ErrorMessage}", productId, errorMsg);
+                throw new ExternalServiceException("Warehouse", errorMsg);
             },
             () => CreateDefaultStock(productId),
             $"getting stock for {productId}"
@@ -51,11 +60,11 @@ public class WarehouseService : IWarehouseService
     public async Task<WarehouseResponse<BulkStockResponse>> GetBulkStockAsync(List<string> productIds, CancellationToken cancellationToken = default)
     {
         if (productIds == null)
-            throw new ArgumentNullException(nameof(productIds));
+            throw new ValidationException("Product IDs list cannot be null");
         if (productIds.Count == 0)
             return CreateSuccessResponse(new BulkStockResponse { Stocks = new List<WarehouseStock>() });
         if (productIds.Count > 1000)
-            throw new ArgumentException("Cannot request more than 1000 products at once", nameof(productIds));
+            throw new ValidationException("Cannot request more than 1000 products at once");
             
         return await ExecuteWithFallbackAsync<BulkStockResponse>(
             async () =>
@@ -75,13 +84,18 @@ public class WarehouseService : IWarehouseService
             async response =>
             {
                 var json = await response.Content.ReadAsStringAsync(cancellationToken);
-                var bulkResponse = JsonSerializer.Deserialize<BulkStockResponse>(json, JsonOptions) 
-                                   ?? new BulkStockResponse();
+                var apiResponse = JsonSerializer.Deserialize<ApiResponse<BulkStockResponse>>(json, JsonOptions);
                 
-                _logger.LogDebug("Successfully retrieved bulk stock from Warehouse: {FoundCount} found, {NotFoundCount} not found", 
-                    bulkResponse.Stocks.Count, bulkResponse.NotFound.Count);
+                if (apiResponse?.Success == true && apiResponse.Data != null)
+                {
+                    _logger.LogDebug("Successfully retrieved bulk stock from Warehouse: {FoundCount} found, {NotFoundCount} not found", 
+                        apiResponse.Data.Stocks.Count, apiResponse.Data.NotFound.Count);
+                    return apiResponse.Data;
+                }
                 
-                return bulkResponse;
+                var errorMsg = apiResponse?.ErrorMessage ?? "Unknown error from Warehouse";
+                _logger.LogError("Warehouse API returned error for bulk stock request: {ErrorMessage}", errorMsg);
+                throw new ExternalServiceException("Warehouse", errorMsg);
             },
             () => new BulkStockResponse 
             { 

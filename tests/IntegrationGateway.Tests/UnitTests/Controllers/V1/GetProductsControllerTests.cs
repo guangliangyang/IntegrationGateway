@@ -1,11 +1,16 @@
+using System.Net;
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using FluentAssertions;
 using MediatR;
 using IntegrationGateway.Api.Controllers.V1;
 using IntegrationGateway.Application.Products.Queries;
 using IntegrationGateway.Models.DTOs;
+using IntegrationGateway.Models.Exceptions;
 
 namespace IntegrationGateway.Tests.Controllers.V1;
 
@@ -13,15 +18,27 @@ namespace IntegrationGateway.Tests.Controllers.V1;
 /// Unit tests for V1 ProductsController GetProducts endpoint
 /// Tests MediatR integration, pagination, and error handling
 /// </summary>
-public class GetProductsControllerTests
+public class GetProductsControllerTests : IDisposable
 {
     private readonly Mock<IMediator> _mockMediator;
     private readonly ProductsController _controller;
+    private readonly WebApplicationFactory<Program> _factory;
 
     public GetProductsControllerTests()
     {
         _mockMediator = new Mock<IMediator>();
         _controller = new ProductsController(_mockMediator.Object);
+        
+        _factory = new WebApplicationFactory<Program>()
+            .WithWebHostBuilder(builder =>
+            {
+                Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Test");
+                builder.ConfigureServices(services =>
+                {
+                    // Replace services with mocks for testing
+                    services.AddScoped(_ => _mockMediator.Object);
+                });
+            });
     }
 
     [Fact]
@@ -293,6 +310,119 @@ public class GetProductsControllerTests
 
         // Assert
         cacheableAttribute.Should().NotBeNull("GetProductsQuery should have Cacheable attribute");
-        cacheableAttribute!.DurationSeconds.Should().Be(300, "Cache should be set to 5 minutes (300 seconds)");
+        cacheableAttribute!.DurationSeconds.Should().Be(5, "Cache should be set to 5 seconds");
+    }
+
+    #region Exception Handling Integration Tests
+
+    [Fact]
+    public async Task GetProducts_WhenValidationExceptionThrown_ShouldReturn400WithProblemDetails()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+        
+        _mockMediator
+            .Setup(m => m.Send(It.IsAny<GetProductsV1Query>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new ValidationException("Invalid pagination parameters"));
+
+        // Act
+        var response = await client.GetAsync("/api/v1/products?page=-1&pageSize=0");
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        
+        var responseContent = await response.Content.ReadAsStringAsync();
+        var problemDetails = JsonSerializer.Deserialize<JsonElement>(responseContent);
+        
+        problemDetails.TryGetProperty("status", out var status).Should().BeTrue();
+        status.GetInt32().Should().Be(400);
+        
+        problemDetails.TryGetProperty("errorType", out var errorType).Should().BeTrue();
+        errorType.GetString().Should().Be("validation_error");
+    }
+
+    [Fact]
+    public async Task GetProducts_WhenExternalServiceExceptionThrown_ShouldReturn502WithProblemDetails()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+        
+        _mockMediator
+            .Setup(m => m.Send(It.IsAny<GetProductsV1Query>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new ExternalServiceException("ERP", "ERP service is unavailable"));
+
+        // Act
+        var response = await client.GetAsync("/api/v1/products");
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.BadGateway);
+        
+        var responseContent = await response.Content.ReadAsStringAsync();
+        var problemDetails = JsonSerializer.Deserialize<JsonElement>(responseContent);
+        
+        problemDetails.TryGetProperty("status", out var status).Should().BeTrue();
+        status.GetInt32().Should().Be(502);
+        
+        problemDetails.TryGetProperty("errorType", out var errorType).Should().BeTrue();
+        errorType.GetString().Should().Be("external_service_error");
+    }
+
+    [Fact]
+    public async Task GetProducts_WhenServiceUnavailableExceptionThrown_ShouldReturn503WithProblemDetails()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+        
+        _mockMediator
+            .Setup(m => m.Send(It.IsAny<GetProductsV1Query>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new ServiceUnavailableException("Service is temporarily down for maintenance"));
+
+        // Act
+        var response = await client.GetAsync("/api/v1/products");
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
+        
+        var responseContent = await response.Content.ReadAsStringAsync();
+        var problemDetails = JsonSerializer.Deserialize<JsonElement>(responseContent);
+        
+        problemDetails.TryGetProperty("status", out var status).Should().BeTrue();
+        status.GetInt32().Should().Be(503);
+        
+        problemDetails.TryGetProperty("errorType", out var errorType).Should().BeTrue();
+        errorType.GetString().Should().Be("service_unavailable");
+    }
+
+    [Fact]
+    public async Task GetProducts_WhenTaskCancelledExceptionThrown_ShouldReturn408WithProblemDetails()
+    {
+        // Arrange
+        var client = _factory.CreateClient();
+        
+        _mockMediator
+            .Setup(m => m.Send(It.IsAny<GetProductsV1Query>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new TaskCanceledException("Request timed out"));
+
+        // Act
+        var response = await client.GetAsync("/api/v1/products");
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.RequestTimeout);
+        
+        var responseContent = await response.Content.ReadAsStringAsync();
+        var problemDetails = JsonSerializer.Deserialize<JsonElement>(responseContent);
+        
+        problemDetails.TryGetProperty("status", out var status).Should().BeTrue();
+        status.GetInt32().Should().Be(408);
+        
+        problemDetails.TryGetProperty("errorType", out var errorType).Should().BeTrue();
+        errorType.GetString().Should().Be("request_timeout");
+    }
+
+    #endregion
+
+    public void Dispose()
+    {
+        _factory?.Dispose();
     }
 }

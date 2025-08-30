@@ -4,6 +4,7 @@ using IntegrationGateway.Models.DTOs;
 using IntegrationGateway.Models.External;
 using IntegrationGateway.Models.Common;
 using IntegrationGateway.Services.Interfaces;
+using IntegrationGateway.Models.Exceptions;
 
 namespace IntegrationGateway.Services.Implementation;
 
@@ -91,14 +92,14 @@ public class ProductService : IProductService
     public async Task<ProductDto?> GetProductAsync(string productId, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(productId))
-            throw new ArgumentException("Product ID cannot be null or empty", nameof(productId));
+            throw new ValidationException("Product ID cannot be null or empty");
             
         _logger.LogDebug("Getting product by ID: {ProductId}", productId);
 
         var erpProduct = await GetErpProductByIdAsync(productId, cancellationToken);
         if (erpProduct == null)
         {
-            return null;
+            throw new NotFoundException("Product", productId);
         }
 
         var stock = await GetWarehouseStockAsync(productId, cancellationToken);
@@ -111,7 +112,7 @@ public class ProductService : IProductService
     public async Task<ProductV2Dto?> GetProductV2Async(string productId, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(productId))
-            throw new ArgumentException("Product ID cannot be null or empty", nameof(productId));
+            throw new ValidationException("Product ID cannot be null or empty");
             
         _logger.LogDebug("Getting product by ID V2: {ProductId}", productId);
 
@@ -131,7 +132,7 @@ public class ProductService : IProductService
     public async Task<ProductDto> CreateProductAsync(CreateProductRequest request, CancellationToken cancellationToken = default)
     {
         if (request == null)
-            throw new ArgumentNullException(nameof(request));
+            throw new ValidationException("Request cannot be null");
             
         _logger.LogDebug("Creating product: {Name}", request.Name);
 
@@ -147,7 +148,7 @@ public class ProductService : IProductService
         var erpResponse = await _erpService.CreateProductAsync(createRequest, cancellationToken);
         if (!erpResponse.Success)
         {
-            throw new InvalidOperationException($"ERP service error: {erpResponse.ErrorMessage}");
+            throw new ExternalServiceException("ERP", $"Service error: {erpResponse.ErrorMessage}");
         }
         
         if (erpResponse.Data == null)
@@ -164,9 +165,9 @@ public class ProductService : IProductService
     public async Task<ProductDto> UpdateProductAsync(string productId, UpdateProductRequest request, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(productId))
-            throw new ArgumentException("Product ID cannot be null or empty", nameof(productId));
+            throw new ValidationException("Product ID cannot be null or empty");
         if (request == null)
-            throw new ArgumentNullException(nameof(request));
+            throw new ValidationException("Request cannot be null");
             
         _logger.LogDebug("Updating product: {ProductId}", productId);
 
@@ -182,12 +183,16 @@ public class ProductService : IProductService
         var erpResponse = await _erpService.UpdateProductAsync(productId, updateRequest, cancellationToken);
         if (!erpResponse.Success)
         {
-            throw new InvalidOperationException($"ERP service error: {erpResponse.ErrorMessage}");
+            if (erpResponse.ErrorMessage?.Contains("not found", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                throw new NotFoundException("Product", productId);
+            }
+            throw new ExternalServiceException("ERP", $"Failed to update product: {erpResponse.ErrorMessage}");
         }
         
         if (erpResponse.Data == null)
         {
-            throw new InvalidOperationException("ERP returned success but null product data");
+            throw new ExternalServiceException("ERP", "ERP returned success but null product data");
         }
 
         var updatedProduct = erpResponse.Data;
@@ -200,7 +205,7 @@ public class ProductService : IProductService
     public async Task<bool> DeleteProductAsync(string productId, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(productId))
-            throw new ArgumentException("Product ID cannot be null or empty", nameof(productId));
+            throw new ValidationException("Product ID cannot be null or empty");
             
         _logger.LogDebug("Deleting product: {ProductId}", productId);
 
@@ -209,12 +214,11 @@ public class ProductService : IProductService
         {
             if (erpResponse.ErrorMessage?.Contains("not found", StringComparison.OrdinalIgnoreCase) == true)
             {
-                _logger.LogDebug("Product {ProductId} not found for deletion", productId);
-                return false;
+                throw new NotFoundException("Product", productId);
             }
             
             _logger.LogError("ERP service error for delete {ProductId}: {ErrorMessage}", productId, erpResponse.ErrorMessage);
-            throw new InvalidOperationException($"ERP service error: {erpResponse.ErrorMessage}");
+            throw new ExternalServiceException("ERP", $"Failed to delete product: {erpResponse.ErrorMessage}");
         }
 
         _logger.LogDebug("Deleted product {ProductId} from ERP", productId);
@@ -263,9 +267,9 @@ public class ProductService : IProductService
     private static void ValidatePaginationParameters(int page, int pageSize)
     {
         if (page <= 0)
-            throw new ArgumentException("Page number must be greater than 0", nameof(page));
+            throw new ValidationException("Page number must be greater than 0");
         if (pageSize <= 0 || pageSize > 1000)
-            throw new ArgumentException("Page size must be between 1 and 1000", nameof(pageSize));
+            throw new ValidationException("Page size cannot exceed 1000");
     }
 
     private async Task<List<ErpProduct>> GetErpProductsAsync(CancellationToken cancellationToken)
@@ -274,7 +278,7 @@ public class ProductService : IProductService
         if (!erpResponse.Success)
         {
             _logger.LogError("ERP service error: {ErrorMessage}", erpResponse.ErrorMessage);
-            throw new InvalidOperationException($"ERP service error: {erpResponse.ErrorMessage}");
+            throw new ExternalServiceException("ERP", $"Service error: {erpResponse.ErrorMessage}");
         }
         
         if (erpResponse.Data == null)
@@ -293,7 +297,7 @@ public class ProductService : IProductService
         if (!erpResponse.Success)
         {
             _logger.LogError("ERP service error for product {ProductId}: {ErrorMessage}", productId, erpResponse.ErrorMessage);
-            throw new InvalidOperationException($"ERP service error: {erpResponse.ErrorMessage}");
+            throw new ExternalServiceException("ERP", $"Service error: {erpResponse.ErrorMessage}");
         }
         
         if (erpResponse.Data == null)

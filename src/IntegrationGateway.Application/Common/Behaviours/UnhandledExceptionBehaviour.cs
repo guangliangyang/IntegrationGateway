@@ -30,7 +30,7 @@ public class UnhandledExceptionBehaviour<TRequest, TResponse> : IPipelineBehavio
             _logger.LogError(ex, "Unhandled exception occurred while processing request: {RequestName} - {@Request}", 
                 requestName, request);
 
-            // Re-throw to allow higher-level exception handling
+            // Re-throw to allow global exception handling middleware to process it
             throw;
         }
     }
