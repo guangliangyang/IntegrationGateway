@@ -99,6 +99,53 @@ curl http://localhost:5051/api/products
 curl http://localhost:5052/api/stock
 ```
 
+## Development Authentication & Debugging
+
+### JWT Configuration
+Some API endpoints require authentication. Configure JWT in your `.env` file:
+
+```bash
+# In project root .env file
+Jwt__SecretKey=your-super-secret-jwt-key-that-is-at-least-32-characters-long
+```
+
+### Getting JWT Token for Testing
+
+1. **Start the Gateway API** (make sure `.env` is configured)
+
+2. **Get a development token**:
+```bash
+# Get JWT token using the development endpoint
+curl http://localhost:5050/api/dev/auth/token?username=testuser
+```
+
+This returns:
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "expires": "2025-08-30T11:38:00Z"
+}
+```
+
+### Using JWT Token in Swagger
+
+1. **Open Swagger UI**: `http://localhost:5050/swagger`
+2. **Click the "Authorize" button** (🔒 icon) at the top right
+3. **In the Bearer token field, enter**:
+   ```
+   eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+   ```
+   (paste your complete token - no "Bearer" prefix needed)
+4. **Click "Authorize"**
+5. **Now you can test authenticated endpoints** like `PUT /api/v1/products/{id}`
+
+### Debugging with IDE
+- Set breakpoints in Controllers (e.g., `ProductsController.UpdateProduct`)
+- Use the JWT token in Swagger or API calls
+- Requests will hit your breakpoints for debugging
+
+> **Note**: The `/api/dev/auth/token` endpoint is for development only and should be removed in production.
+
 ## Development Workflow
 
 ### 1. Start All Services
